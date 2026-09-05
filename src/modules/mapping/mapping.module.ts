@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { MappingController } from './controllers';
 import { MappingEngineService } from './services';
-import { StandardMappingEntity } from '../core/entities';
+import { StandardMappingSchema, StandardMappingSchemas } from '../core/schemas';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([StandardMappingEntity])],
+  imports: [MongooseModule.forFeature([{ name: StandardMappingSchema.name, schema: StandardMappingSchemas }])],
   controllers: [MappingController],
   providers: [MappingEngineService],
   exports: [MappingEngineService],

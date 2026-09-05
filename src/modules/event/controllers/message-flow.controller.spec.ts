@@ -1,12 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { getModelToken } from '@nestjs/mongoose';
 import { MessageFlowController } from './message-flow.controller';
 import { MessageFlowService } from '../services/message-flow.service';
-import { ApplicationEntityEntity } from '../../core/entities/application-entity.entity';
-import { RoutingTableEntity } from '../../core/entities/routing-table.entity';
-import { StandardMappingEntity } from '../../core/entities/standard-mapping.entity';
-import { ValidationRuleEntity } from '../../core/entities/validation-rule.entity';
+import { ApplicationEntity } from '../../core/schemas/application-entity.schema';
+import { RoutingTableSchema } from '../../core/schemas/routing-table.schema';
+import { StandardMappingSchema } from '../../core/schemas/standard-mapping.schema';
+import { ValidationRuleSchema } from '../../core/schemas/validation-rule.schema';
+
+const mockQuery = {
+  exec: jest.fn().mockResolvedValue([]),
+  sort: jest.fn().mockReturnThis(),
+  skip: jest.fn().mockReturnThis(),
+  limit: jest.fn().mockReturnThis(),
+};
+
+const mockModel = {
+  find: jest.fn().mockReturnValue(mockQuery),
+  findById: jest.fn().mockReturnValue(mockQuery),
+  findOne: jest.fn().mockReturnValue(mockQuery),
+  countDocuments: jest.fn().mockResolvedValue(0),
+  create: jest.fn(),
+  insertMany: jest.fn(),
+};
 
 describe('MessageFlowController', () => {
   let controller: MessageFlowController;
@@ -22,17 +37,16 @@ describe('MessageFlowController', () => {
     listRecentTraces: jest.fn().mockResolvedValue([]),
     getAuditForMessage: jest.fn().mockResolvedValue(null),
   };
-  const repositoryMock = { find: jest.fn().mockResolvedValue([]) };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MessageFlowController],
       providers: [
         { provide: MessageFlowService, useValue: flowServiceMock },
-        { provide: getRepositoryToken(ApplicationEntityEntity), useValue: repositoryMock },
-        { provide: getRepositoryToken(RoutingTableEntity), useValue: repositoryMock },
-        { provide: getRepositoryToken(StandardMappingEntity), useValue: repositoryMock },
-        { provide: getRepositoryToken(ValidationRuleEntity), useValue: repositoryMock },
+        { provide: getModelToken(ApplicationEntity.name), useValue: mockModel },
+        { provide: getModelToken(RoutingTableSchema.name), useValue: mockModel },
+        { provide: getModelToken(StandardMappingSchema.name), useValue: mockModel },
+        { provide: getModelToken(ValidationRuleSchema.name), useValue: mockModel },
       ],
     }).compile();
 
@@ -59,7 +73,7 @@ describe('MessageFlowController', () => {
 
   it('getTopology should return application entities, routing tables, mappings, and validations', async () => {
     const result = await controller.getTopology();
-    expect(repositoryMock.find).toHaveBeenCalled();
+    expect(mockModel.find).toHaveBeenCalled();
     expect(result).toEqual({
       applicationEntities: [],
       routingTables: [],

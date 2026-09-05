@@ -1,145 +1,119 @@
-
-
-
-import { ObjectLiteral, SelectQueryBuilder } from 'typeorm'
-
 type ListQuery = {
-  page?: number
-  limit?: number
-  filters?: Record<string, any>
-}
-
+  page?: number;
+  limit?: number;
+  filters?: Record<string, any>;
+};
 
 export type ListResult<T> = {
-  data: T[]
+  data: T[];
   pagination: {
-    page: number
-    limit: number
-    total: number
-    totalPages: number
-  }
-  meta: any
-}
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  meta: any;
+};
 
-export async function executeListQuery<T extends ObjectLiteral>(
-  qb: SelectQueryBuilder<T>,
-  alias: string,
-  query: ListQuery
+type ParsedFilter = {
+  type: string;
+  value: any;
+  valueTo?: any;
+};
+
+export async function executeListQuery<T>(
+  model: any,
+  baseFilter: Record<string, any>,
+  query: ListQuery,
 ): Promise<ListResult<T>> {
-  const page = Math.max(Number(query.page || 1), 1)
-  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100)
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
 
-  applyFilters(qb, alias, query.filters || {})
+  const mongoFilter = { ...baseFilter };
+  applyFilters(mongoFilter, query.filters || {});
 
-  const [data, total] = await qb
-    .skip((page - 1) * limit)
-    .take(limit)
-    .getManyAndCount()
+  const [data, total] = await Promise.all([
+    model.find(mongoFilter).skip((page - 1) * limit).limit(limit).exec(),
+    model.countDocuments(mongoFilter),
+  ]);
 
-  const totalPages = Math.ceil(total / limit)
-
-  const pagination = {
-    page,
-    limit,
-    total,
-    totalPages,
-  }
+  const totalPages = Math.ceil(total / limit);
+  const pagination = { page, limit, total, totalPages };
 
   return {
-    data,
+    data: data as T[],
     pagination,
     meta: pagination,
-  }
+  };
 }
-
 
 export function applyFilters(
-  qb: SelectQueryBuilder<any>,
-  alias: string,
-  filters: Record<string, any>
-) {
+  mongoFilter: Record<string, any>,
+  filters: Record<string, any>,
+): void {
   Object.entries(filters).forEach(([field, raw]) => {
-    if (!raw) return
+    if (!raw) return;
 
-    const { type, value, valueTo } = parseFilter(raw)
-    applyFilter(qb, alias, field, type, value, valueTo)
-  })
+    const parsed = parseFilter(raw);
+    applyFilter(mongoFilter, field, parsed);
+  });
 }
 
-function parseFilter(raw: string) {
-  const [type, value, valueTo] = raw.split('|')
-
-  return {
-    type,
-    value,
-    valueTo,
-  }
-}
-
-function resolveField(alias: string, field: string) {
-  return field.includes('.') ? field : `${alias}.${field}`
-}
-
-function paramName(field: string, type: string) {
-  return `${field.replace('.', '_')}_${type}_${Date.now()}`
+function parseFilter(raw: string): ParsedFilter {
+  const [type, value, valueTo] = raw.split('|');
+  return { type, value, valueTo };
 }
 
 export function applyFilter(
-  qb: SelectQueryBuilder<any>,
-  alias: string,
+  mongoFilter: Record<string, any>,
   field: string,
-  type: string,
-  value?: any,
-  valueTo?: any
-) {
-  const column = resolveField(alias, field)
-  const param = paramName(field, type)
+  filter: ParsedFilter,
+): void {
+  const { type, value, valueTo } = filter;
 
   switch (type) {
     case 'EQUALS':
-      qb.andWhere(`${column} = :${param}`, { [param]: value })
-      break
+      mongoFilter[field] = value;
+      break;
 
     case 'NOT_EQUALS':
-      qb.andWhere(`${column} != :${param}`, { [param]: value })
-      break
+      mongoFilter[field] = { $ne: value };
+      break;
 
     case 'CONTAINS':
     case 'FUZZY_MATCH':
-      qb.andWhere(`${column} LIKE :${param}`, {
-        [param]: `%${value}%`,
-      })
-      break
+      mongoFilter[field] = { $regex: String(value), $options: 'i' };
+      break;
 
     case 'GREATER_THAN':
-      qb.andWhere(`${column} > :${param}`, { [param]: value })
-      break
+      mongoFilter[field] = { $gt: coerce(value) };
+      break;
 
     case 'GREATER_THAN_OR_EQUAL':
-      qb.andWhere(`${column} >= :${param}`, { [param]: value })
-      break
+      mongoFilter[field] = { $gte: coerce(value) };
+      break;
 
     case 'LESS_THAN':
-      qb.andWhere(`${column} < :${param}`, { [param]: value })
-      break
+      mongoFilter[field] = { $lt: coerce(value) };
+      break;
 
     case 'LESS_THAN_OR_EQUAL':
-      qb.andWhere(`${column} <= :${param}`, { [param]: value })
-      break
+      mongoFilter[field] = { $lte: coerce(value) };
+      break;
 
-    case 'BETWEEN': {
-      const from = `${param}_from`
-      const to = `${param}_to`
-
-      qb.andWhere(`${column} BETWEEN :${from} AND :${to}`, {
-        [from]: value,
-        [to]: valueTo,
-      })
-      break
-    }
+    case 'BETWEEN':
+      mongoFilter[field] = { $gte: coerce(value), $lte: coerce(valueTo) };
+      break;
 
     case 'MISSING':
-      qb.andWhere(`${column} IS NULL`)
-      break
+      mongoFilter[field] = { $exists: false };
+      break;
   }
+}
+
+function coerce(value: any): any {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  if (!isNaN(Number(value))) return Number(value);
+  return value;
 }

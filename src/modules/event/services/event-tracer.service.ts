@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { randomUUID } from 'crypto';
-import { MessageEventEntity, EventStreamEntity } from '../../core/entities';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { MessageEventSchema, EventStreamSchema } from '../../core/schemas';
 import {
   MessageEvent,
   EventStream,
@@ -18,10 +17,10 @@ export class EventTracerService implements EventTracer {
   private activeTraces = new Map<string, EventStream>();
 
   constructor(
-    @InjectRepository(MessageEventEntity)
-    private eventRepository: Repository<MessageEventEntity>,
-    @InjectRepository(EventStreamEntity)
-    private eventStreamRepository: Repository<EventStreamEntity>,
+    @InjectModel(MessageEventSchema.name)
+    private eventModel: Model<MessageEventSchema>,
+    @InjectModel(EventStreamSchema.name)
+    private eventStreamModel: Model<EventStreamSchema>,
   ) {}
 
   startTrace(messageId: string, correlationId: string): void {
@@ -38,13 +37,11 @@ export class EventTracerService implements EventTracer {
 
   async recordEvent(event: MessageEvent): Promise<void> {
     try {
-      // Save to database
-      await this.eventRepository.save({
+      await new this.eventModel({
         ...event,
         correlationId: event.correlationId || event.metadata?.correlationId || '',
-      });
+      }).save();
 
-      // Update active trace
       const trace = this.activeTraces.get(event.messageId);
       if (trace) {
         trace.events.push(event);
@@ -64,9 +61,7 @@ export class EventTracerService implements EventTracer {
   }
 
   async getEventStream(messageId: string): Promise<EventStream | null> {
-    const entity = await this.eventStreamRepository.findOne({
-      where: { messageId },
-    });
+    const entity = await this.eventStreamModel.findOne({ messageId }).exec();
 
     if (entity) {
       return {
@@ -84,10 +79,11 @@ export class EventTracerService implements EventTracer {
   }
 
   async listRecentTraces(limit: number = 20): Promise<EventStream[]> {
-    const entities = await this.eventStreamRepository.find({
-      order: { startTime: 'DESC' },
-      take: limit,
-    });
+    const entities = await this.eventStreamModel
+      .find()
+      .sort({ startTime: -1 })
+      .limit(limit)
+      .exec();
 
     return entities.map((entity) => ({
       messageId: entity.messageId,
@@ -101,10 +97,10 @@ export class EventTracerService implements EventTracer {
   }
 
   async getAuditTrail(messageId: string): Promise<MessageEventAuditEntry | null> {
-    const events = await this.eventRepository.find({
-      where: { messageId },
-      order: { sequenceNumber: 'ASC' },
-    });
+    const events = await this.eventModel
+      .find({ messageId })
+      .sort({ sequenceNumber: 1 })
+      .exec();
 
     if (events.length === 0) {
       return null;
@@ -114,17 +110,17 @@ export class EventTracerService implements EventTracer {
     const lastEvent = events[events.length - 1];
 
     return {
-      id: randomUUID(),
+      id: messageId,
       messageId,
-      events: events as MessageEvent[],
+      events: events as unknown as MessageEvent[],
       sourceAE: firstEvent.sourceAE,
       targetAE: firstEvent.targetAE || '',
       messageType: 'UNKNOWN',
       status: lastEvent.status as MessageStatus,
       priority: '',
-      createdAt: firstEvent.createdAt,
-      updatedAt: lastEvent.createdAt,
-      retainedUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
+      createdAt: firstEvent.createdAt!,
+      updatedAt: lastEvent.createdAt!,
+      retainedUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
     };
   }
 
@@ -143,8 +139,7 @@ export class EventTracerService implements EventTracer {
     trace.totalDuration =
       now.getTime() - trace.startTime.getTime();
 
-    // Save to database
-    const entity = this.eventStreamRepository.create({
+    const entity = new this.eventStreamModel({
       messageId,
       events: trace.events,
       status: finalStatus,
@@ -154,7 +149,7 @@ export class EventTracerService implements EventTracer {
       errorCount: trace.errorCount,
     });
 
-    await this.eventStreamRepository.save(entity);
+    await entity.save();
     this.activeTraces.delete(messageId);
 
     this.logger.log(
@@ -185,15 +180,13 @@ export class EventTracerService implements EventTracer {
       Date.now() - retentionDays * 24 * 60 * 60 * 1000,
     );
 
-    const result = await this.eventRepository.delete({
-      createdAt: {
-        $lt: cutoffDate,
-      } as any,
+    const result = await this.eventModel.deleteMany({
+      createdAt: { $lt: cutoffDate },
     });
 
     this.logger.log(
-      `Purged ${result.affected} old events (before ${cutoffDate})`,
+      `Purged ${result.deletedCount} old events (before ${cutoffDate})`,
     );
-    return result.affected || 0;
+    return result.deletedCount || 0;
   }
 }

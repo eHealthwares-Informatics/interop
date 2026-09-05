@@ -1,8 +1,7 @@
 import { Injectable, UnprocessableEntityException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'crypto';
-import { In, Repository } from 'typeorm';
-import { ValidationRuleEntity } from '../../core/entities';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ValidationRuleSchema } from '../../core/schemas';
 import {
   ContextEnrichmentResolveInput,
   ContextEnrichmentResult,
@@ -17,32 +16,26 @@ import { CodingConceptClientService } from './coding-concept-client.service';
 @Injectable()
 export class ContextEnrichmentService {
   constructor(
-    @InjectRepository(ValidationRuleEntity)
-    private readonly enrichmentRepository: Repository<ValidationRuleEntity>,
+    @InjectModel(ValidationRuleSchema.name)
+    private readonly enrichmentModel: Model<ValidationRuleSchema>,
     private readonly codingConceptClient: CodingConceptClientService,
   ) {}
 
   async create(
     payload: Omit<ValidationRule, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<ValidationRule> {
-    const entity = this.enrichmentRepository.create({
-      id: randomUUID(),
-      ...payload,
-    });
-
-    const saved = await this.enrichmentRepository.save(entity);
+    const entity = new this.enrichmentModel(payload);
+    const saved = await entity.save();
     return saved as unknown as ValidationRule;
   }
 
   async list(): Promise<ValidationRule[]> {
-    const rules = await this.enrichmentRepository.find({
-      order: { name: 'ASC' },
-    });
+    const rules = await this.enrichmentModel.find().sort({ name: 1 }).exec();
     return rules as unknown as ValidationRule[];
   }
 
   async get(id: string): Promise<ValidationRule | null> {
-    const rule = await this.enrichmentRepository.findOne({ where: { id } });
+    const rule = await this.enrichmentModel.findById(id).exec();
     return rule as ValidationRule | null;
   }
 
@@ -50,12 +43,12 @@ export class ContextEnrichmentService {
     id: string,
     updates: Partial<ValidationRule>,
   ): Promise<ValidationRule | null> {
-    await this.enrichmentRepository.update(id, updates as any);
+    await this.enrichmentModel.findByIdAndUpdate(id, { $set: updates }).exec();
     return this.get(id);
   }
 
   async delete(id: string): Promise<void> {
-    await this.enrichmentRepository.delete(id);
+    await this.enrichmentModel.findByIdAndDelete(id).exec();
   }
 
   async resolve(input: ContextEnrichmentResolveInput): Promise<ContextEnrichmentResult> {
@@ -76,12 +69,12 @@ export class ContextEnrichmentService {
       return { context, warnings, errors };
     }
 
-    const rules = await this.enrichmentRepository.findBy({
-      id: In(enrichmentIds),
-    });
+    const rules = await this.enrichmentModel.find({
+      _id: { $in: enrichmentIds },
+    }).exec();
     const orderedRules = enrichmentIds
-      .map((enrichmentId) => rules.find((rule) => rule.id === enrichmentId))
-      .filter(Boolean) as ValidationRuleEntity[];
+      .map((enrichmentId) => rules.find((rule) => rule._id.toString() === enrichmentId))
+      .filter(Boolean) as ValidationRuleSchema[];
 
     for (const rule of orderedRules) {
       if (!rule.enabled) {

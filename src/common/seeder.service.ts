@@ -1,28 +1,28 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import {
   AEStatus,
   MessageType,
   ProtocolType,
   RouteStatus,
 } from './enums';
-import { ApplicationEntityEntity } from '../modules/core/entities/application-entity.entity';
-import { RoutingTableEntity } from '../modules/core/entities/routing-table.entity';
-import { StandardMappingEntity } from '../modules/core/entities/standard-mapping.entity';
-import { ValidationRuleEntity } from '../modules/core/entities/validation-rule.entity';
+import { ApplicationEntity } from '../modules/core/schemas/application-entity.schema';
+import { RoutingTableSchema } from '../modules/core/schemas/routing-table.schema';
+import { StandardMappingSchema } from '../modules/core/schemas/standard-mapping.schema';
+import { ValidationRuleSchema } from '../modules/core/schemas/validation-rule.schema';
 
 @Injectable()
 export class SeederService implements OnModuleInit {
   constructor(
-    @InjectRepository(ApplicationEntityEntity)
-    private readonly aeRepo: Repository<ApplicationEntityEntity>,
-    @InjectRepository(RoutingTableEntity)
-    private readonly routingRepo: Repository<RoutingTableEntity>,
-    @InjectRepository(StandardMappingEntity)
-    private readonly mappingRepo: Repository<StandardMappingEntity>,
-    @InjectRepository(ValidationRuleEntity)
-    private readonly validationRepo: Repository<ValidationRuleEntity>,
+    @InjectModel(ApplicationEntity.name)
+    private readonly aeModel: Model<ApplicationEntity>,
+    @InjectModel(RoutingTableSchema.name)
+    private readonly routingModel: Model<RoutingTableSchema>,
+    @InjectModel(StandardMappingSchema.name)
+    private readonly mappingModel: Model<StandardMappingSchema>,
+    @InjectModel(ValidationRuleSchema.name)
+    private readonly validationModel: Model<ValidationRuleSchema>,
   ) {}
 
   async onModuleInit() {
@@ -39,9 +39,8 @@ export class SeederService implements OnModuleInit {
     const switchApplicationUuid =
       process.env.SWITCH_APPLICATION_UUID || '00000000-0000-0000-0000-000000000001';
 
-    await this.aeRepo.save([
-      this.aeRepo.create({
-        id: process.env.SWITCH_AE_ID || 'switch',
+    await this.aeModel.insertMany([
+      {
         name: 'Switch',
         description: 'Internal switch identity used for outbound sending application/facility metadata.',
         status: AEStatus.ACTIVE,
@@ -80,9 +79,8 @@ export class SeederService implements OnModuleInit {
           outbound: [],
         },
         securitySettings: { tlsEnabled: false },
-      }),
-      this.aeRepo.create({
-        id: 'healthstack',
+      },
+      {
         name: 'Healthstack',
         description: 'Source EMR that can submit orders in custom JSON',
         status: AEStatus.ACTIVE,
@@ -115,38 +113,14 @@ export class SeederService implements OnModuleInit {
           ProtocolType.FHIR_R4,
         ],
         inboundConfig: [
-          {
-            protocol: ProtocolType.CUSTOM_JSON,
-            host: '127.0.0.1',
-            port: 3000,
-          },
-          {
-            protocol: ProtocolType.HL7_V2,
-            host: '127.0.0.1',
-            port: 3000,
-          },
-          {
-            protocol: ProtocolType.FHIR_R4,
-            host: '127.0.0.1',
-            port: 3000,
-          },
+          { protocol: ProtocolType.CUSTOM_JSON, host: '127.0.0.1', port: 3000 },
+          { protocol: ProtocolType.HL7_V2, host: '127.0.0.1', port: 3000 },
+          { protocol: ProtocolType.FHIR_R4, host: '127.0.0.1', port: 3000 },
         ],
         outboundConfig: [
-          {
-            protocol: ProtocolType.CUSTOM_JSON,
-            host: '127.0.0.1',
-            port: 3000,
-          },
-          {
-            protocol: ProtocolType.HL7_V2,
-            host: '127.0.0.1',
-            port: 3000,
-          },
-          {
-            protocol: ProtocolType.FHIR_R4,
-            host: '127.0.0.1',
-            port: 3000,
-          },
+          { protocol: ProtocolType.CUSTOM_JSON, host: '127.0.0.1', port: 3000 },
+          { protocol: ProtocolType.HL7_V2, host: '127.0.0.1', port: 3000 },
+          { protocol: ProtocolType.FHIR_R4, host: '127.0.0.1', port: 3000 },
         ],
         mappings: {
           inbound: [
@@ -159,9 +133,8 @@ export class SeederService implements OnModuleInit {
           outbound: [],
         },
         securitySettings: { tlsEnabled: false },
-      }),
-      this.aeRepo.create({
-        id: 'dcm4chee',
+      },
+      {
         name: 'DCM4CHEE',
         description: 'Radiology downstream system receiving HL7 orders.',
         status: AEStatus.ACTIVE,
@@ -185,36 +158,17 @@ export class SeederService implements OnModuleInit {
         },
         inboundCapabilities: [ProtocolType.HL7_V2],
         outboundCapabilities: [ProtocolType.HL7_V2],
-        inboundConfig: [
-          {
-            protocol: ProtocolType.HL7_V2,
-            host: '127.0.0.1',
-            port: dcmPort,
-          },
-        ],
-        outboundConfig: [
-          {
-            protocol: ProtocolType.HL7_V2,
-            host: '127.0.0.1',
-            port: dcmPort,
-          },
-        ],
+        inboundConfig: [{ protocol: ProtocolType.HL7_V2, host: '127.0.0.1', port: dcmPort }],
+        outboundConfig: [{ protocol: ProtocolType.HL7_V2, host: '127.0.0.1', port: dcmPort }],
         mappings: {
           outbound: [
-            {
-              messageType: MessageType.ORDER,
-              protocol: ProtocolType.HL7_V2,
-            },
-            {
-              messageType: MessageType.PATIENT,
-              protocol: ProtocolType.HL7_V2,
-            },
+            { messageType: MessageType.ORDER, protocol: ProtocolType.HL7_V2 },
+            { messageType: MessageType.PATIENT, protocol: ProtocolType.HL7_V2 },
           ],
         },
         securitySettings: { tlsEnabled: false },
-      }),
-      this.aeRepo.create({
-        id: 'openelis',
+      },
+      {
         name: 'OpenELIS',
         description: 'Laboratory downstream system receiving FHIR resources.',
         status: AEStatus.ACTIVE,
@@ -238,36 +192,37 @@ export class SeederService implements OnModuleInit {
         },
         inboundCapabilities: [ProtocolType.FHIR_R4],
         outboundCapabilities: [ProtocolType.FHIR_R4],
-        inboundConfig: [
-          {
-            protocol: ProtocolType.FHIR_R4,
-            host: '127.0.0.1',
-            port: openElisPort,
+        inboundConfig: [{
+          protocol: ProtocolType.FHIR_R4,
+          host: process.env.OPENELIS_HOST || '54.246.253.48',
+          port: Number(process.env.OPENELIS_PORT) || 443,
+          basePath: process.env.OPENELIS_BASE_PATH || '/openelisglobal/fhir',
+          status: 'ACTIVE',
+          httpConfig: {
+            authentication: 'basic',
+            authToken: '',
           },
-        ],
-        outboundConfig: [
-          {
-            protocol: ProtocolType.FHIR_R4,
-            host: '127.0.0.1',
-            port: openElisPort,
+        }],
+        outboundConfig: [{
+          protocol: ProtocolType.FHIR_R4,
+          host: process.env.OPENELIS_HOST || '54.246.253.48',
+          port: Number(process.env.OPENELIS_PORT) || 443,
+          basePath: process.env.OPENELIS_BASE_PATH || '/openelisglobal/fhir',
+          status: 'ACTIVE',
+          httpConfig: {
+            authentication: 'basic',
+            authToken: '',
           },
-        ],
+        }],
         mappings: {
           outbound: [
-            {
-              messageType: MessageType.ORDER,
-              protocol: ProtocolType.FHIR_R4,
-            },
-            {
-              messageType: MessageType.PATIENT,
-              protocol: ProtocolType.FHIR_R4,
-            },
+            { messageType: MessageType.ORDER, protocol: ProtocolType.FHIR_R4 },
+            { messageType: MessageType.PATIENT, protocol: ProtocolType.FHIR_R4 },
           ],
         },
         securitySettings: { tlsEnabled: false },
-      }),
-      this.aeRepo.create({
-        id: 'mock-custom',
+      },
+      {
         name: 'Mock Custom Receiver',
         description: 'Custom JSON sink used for custom outbound mapping tests.',
         status: AEStatus.ACTIVE,
@@ -291,38 +246,24 @@ export class SeederService implements OnModuleInit {
         },
         inboundCapabilities: [ProtocolType.CUSTOM_JSON],
         outboundCapabilities: [ProtocolType.CUSTOM_JSON],
-        inboundConfig: [
-          {
-            protocol: ProtocolType.CUSTOM_JSON,
-            host: '127.0.0.1',
-            port: customPort,
-            status: 'ACTIVE',
-          },
-        ],
-        outboundConfig: [
-          {
-            protocol: ProtocolType.CUSTOM_JSON,
-            host: '127.0.0.1',
-            port: customPort,
-            status: 'ACTIVE',
-          },
-        ],
+        inboundConfig: [{
+          protocol: ProtocolType.CUSTOM_JSON, host: '127.0.0.1', port: customPort, status: 'ACTIVE',
+        }],
+        outboundConfig: [{
+          protocol: ProtocolType.CUSTOM_JSON, host: '127.0.0.1', port: customPort, status: 'ACTIVE',
+        }],
         mappings: {
-          outbound: [
-            {
-              messageType: MessageType.ORDER,
-              protocol: ProtocolType.CUSTOM_JSON,
-              mappingId: 'canonical-order-to-custom-json',
-            },
-          ],
+          outbound: [{
+            messageType: MessageType.ORDER,
+            protocol: ProtocolType.CUSTOM_JSON,
+            mappingId: 'canonical-order-to-custom-json',
+          }],
         },
         securitySettings: { tlsEnabled: false },
-      }),
-      this.aeRepo.create({
-        id: 'rxsoft-lis',
+      },
+      {
         name: 'RxSoft LIS',
-        description:
-          'RxSoft Laboratory Information System receiving CUSTOM_JSON orders.',
+        description: 'RxSoft Laboratory Information System receiving CUSTOM_JSON orders.',
         status: AEStatus.ACTIVE,
         facilityId: 'LIS-FAC-001',
         facilityName: 'RxSoft LIS',
@@ -344,40 +285,25 @@ export class SeederService implements OnModuleInit {
         },
         inboundCapabilities: [ProtocolType.CUSTOM_JSON],
         outboundCapabilities: [ProtocolType.CUSTOM_JSON],
-        inboundConfig: [
-          {
-            protocol: ProtocolType.CUSTOM_JSON,
-            host: '127.0.0.1',
-            port: 8091,
-            basePath: '/lis/interop/order',
-            status: 'ACTIVE',
-          },
-        ],
-        outboundConfig: [
-          {
-            protocol: ProtocolType.CUSTOM_JSON,
-            host: '127.0.0.1',
-            port: 8091,
-            basePath: '/lis/interop/order',
-            status: 'ACTIVE',
-          },
-        ],
-        mappings: {
-          inbound: [],
-          outbound: [],
-        },
+        inboundConfig: [{
+          protocol: ProtocolType.CUSTOM_JSON, host: '127.0.0.1', port: 8091,
+          basePath: '/lis/interop/order', status: 'ACTIVE',
+        }],
+        outboundConfig: [{
+          protocol: ProtocolType.CUSTOM_JSON, host: '127.0.0.1', port: 8091,
+          basePath: '/lis/interop/order', status: 'ACTIVE',
+        }],
+        mappings: { inbound: [], outbound: [] },
         securitySettings: { tlsEnabled: false },
-      }),
+      },
     ]);
   }
 
   private async seedMappings() {
-    await this.mappingRepo.save([
-      this.mappingRepo.create({
-        id: 'healthstack-order-model-to-canonical',
+    await this.mappingModel.insertMany([
+      {
         name: 'HealthStack Order Model -> Canonical',
-        description:
-          'Maps the Feathers/Mongoose order payload produced by HealthStack into the switch canonical envelope.',
+        description: 'Maps the Feathers/Mongoose order payload produced by HealthStack into the switch canonical envelope.',
         sourceProtocol: ProtocolType.CUSTOM_JSON,
         targetProtocol: 'CANONICAL',
         sourceMessageType: MessageType.ORDER,
@@ -385,183 +311,29 @@ export class SeederService implements OnModuleInit {
         version: '1.0.0',
         active: true,
         mappingSteps: [
-          {
-            id: '1',
-            name: 'Message Type',
-            type: 'field-map',
-            sourceField: '',
-            targetField: 'messageType',
-            transformation: '"ORDER"',
-          },
-          {
-            id: '2',
-            name: 'Order Id',
-            type: 'field-map',
-            sourceField: '_id',
-            targetField: 'order.id',
-            transformation: 'String(value || sourceMessage.documentationId || "")',
-          },
-          {
-            id: '3',
-            name: 'Order Identifier',
-            type: 'field-map',
-            sourceField: 'documentationId',
-            targetField: 'order.identifier[0].value',
-            transformation:
-              'String(value || sourceMessage._id || sourceMessage.order || "unknown-order")',
-          },
-          {
-            id: '4',
-            name: 'Order Identifier System',
-            type: 'field-map',
-            sourceField: '',
-            targetField: 'order.identifier[0].system',
-            transformation: '"urn:healthstack:order"',
-          },
-          {
-            id: '5',
-            name: 'Order Code',
-            type: 'field-map',
-            sourceField: 'order_code',
-            targetField: 'order.code.code',
-            transformation:
-              'String(value || sourceMessage.code || sourceMessage.order || sourceMessage.order_category || "UNKNOWN")',
-          },
-          {
-            id: '6',
-            name: 'Order Display',
-            type: 'field-map',
-            sourceField: 'order',
-            targetField: 'order.code.display',
-            transformation:
-              'String(value || sourceMessage.code_display || sourceMessage.order_category || "Unknown")',
-          },
-          {
-            id: '7',
-            name: 'Authored On',
-            type: 'field-map',
-            sourceField: 'createdAt',
-            targetField: 'order.authoredOn',
-            transformation: 'value ? new Date(value).toISOString() : now',
-          },
-          {
-            id: '8',
-            name: 'Requester',
-            type: 'field-map',
-            sourceField: 'requestingdoctor_Id',
-            targetField: 'order.requester.id',
-            transformation:
-              'String(value || sourceMessage.requestingdoctor_facilityId || "unknown-requester")',
-          },
-          {
-            id: '9',
-            name: 'Patient Subject',
-            type: 'field-map',
-            sourceField: 'clientId',
-            targetField: 'order.subject.id',
-            transformation:
-              'String(value || sourceMessage.client?._id || sourceMessage.client?.id || "unknown-patient")',
-          },
-          {
-            id: '10',
-            name: 'Order Status',
-            type: 'field-map',
-            sourceField: 'order_status',
-            targetField: 'order.status',
-            transformation:
-              'String(value || "active").toLowerCase() === "pending" ? "active" : String(value || "active").toLowerCase()',
-          },
-          {
-            id: '11',
-            name: 'Order Priority',
-            type: 'field-map',
-            sourceField: 'priority',
-            targetField: 'order.priority',
-            transformation: 'String(value || "ROUTINE").toUpperCase()',
-          },
-          {
-            id: '12',
-            name: 'Order Category Metadata',
-            type: 'field-map',
-            sourceField: 'order_category',
-            targetField: 'metadata.orderCategory',
-            transformation: 'String(value || sourceMessage.order || "").toUpperCase()',
-          },
-          {
-            id: '13',
-            name: 'Target AE',
-            type: 'field-map',
-            sourceField: 'targetAE',
-            targetField: 'metadata.targetAE',
-            transformation:
-              'String(value || sourceMessage.targetAe || sourceMessage.destination_ae || "")',
-          },
-          {
-            id: '14',
-            name: 'Patient Id',
-            type: 'field-map',
-            sourceField: 'clientId',
-            targetField: 'patient.id',
-            transformation:
-              'String(value || sourceMessage.client?._id || sourceMessage.client?.id || "unknown-patient")',
-          },
-          {
-            id: '15',
-            name: 'Patient Identifier Value',
-            type: 'field-map',
-            sourceField: 'clientId',
-            targetField: 'patient.identifier[0].value',
-            transformation:
-              'String(value || sourceMessage.client?._id || sourceMessage.client?.id || "unknown-patient")',
-          },
-          {
-            id: '16',
-            name: 'Patient Identifier System',
-            type: 'field-map',
-            sourceField: '',
-            targetField: 'patient.identifier[0].system',
-            transformation: '"urn:healthstack:patient"',
-          },
-          {
-            id: '17',
-            name: 'Patient Family Name',
-            type: 'field-map',
-            sourceField: 'client.lastname',
-            targetField: 'patient.name.family',
-            transformation:
-              'String(value || sourceMessage.clientname || sourceMessage.client?.family || "Unknown")',
-          },
-          {
-            id: '18',
-            name: 'Patient Given Name',
-            type: 'field-map',
-            sourceField: 'client.firstname',
-            targetField: 'patient.name.given[0]',
-            transformation:
-              'String(value || sourceMessage.client?.given?.[0] || "Patient")',
-          },
-          {
-            id: '19',
-            name: 'Patient Birth Date',
-            type: 'field-map',
-            sourceField: 'client.dob',
-            targetField: 'patient.birthDate',
-            transformation:
-              'value ? new Date(value).toISOString().split("T")[0] : (sourceMessage.client?.dateOfBirth || undefined)',
-          },
-          {
-            id: '20',
-            name: 'Patient Gender',
-            type: 'field-map',
-            sourceField: 'client.gender',
-            targetField: 'patient.gender',
-            transformation:
-              'String(value || "unknown").toUpperCase() === "F" ? "female" : String(value || "unknown").toUpperCase() === "M" ? "male" : String(value || "unknown").toLowerCase()',
-          },
+          { id: '1', name: 'Message Type', type: 'field-map', sourceField: '', targetField: 'messageType', transformation: '"ORDER"' },
+          { id: '2', name: 'Order Id', type: 'field-map', sourceField: '_id', targetField: 'order.id', transformation: 'String(value || sourceMessage.documentationId || "")' },
+          { id: '3', name: 'Order Identifier', type: 'field-map', sourceField: 'documentationId', targetField: 'order.identifier[0].value', transformation: 'String(value || sourceMessage._id || sourceMessage.order || "unknown-order")' },
+          { id: '4', name: 'Order Identifier System', type: 'field-map', sourceField: '', targetField: 'order.identifier[0].system', transformation: '"urn:healthstack:order"' },
+          { id: '5', name: 'Order Code', type: 'field-map', sourceField: 'order_code', targetField: 'order.code.code', transformation: 'String(value || sourceMessage.code || sourceMessage.order || sourceMessage.order_category || "UNKNOWN")' },
+          { id: '6', name: 'Order Display', type: 'field-map', sourceField: 'order', targetField: 'order.code.display', transformation: 'String(value || sourceMessage.code_display || sourceMessage.order_category || "Unknown")' },
+          { id: '7', name: 'Authored On', type: 'field-map', sourceField: 'createdAt', targetField: 'order.authoredOn', transformation: 'value ? new Date(value).toISOString() : now' },
+          { id: '8', name: 'Requester', type: 'field-map', sourceField: 'requestingdoctor_Id', targetField: 'order.requester.id', transformation: 'String(value || sourceMessage.requestingdoctor_facilityId || "unknown-requester")' },
+          { id: '9', name: 'Patient Subject', type: 'field-map', sourceField: 'clientId', targetField: 'order.subject.id', transformation: 'String(value || sourceMessage.client?._id || sourceMessage.client?.id || "unknown-patient")' },
+          { id: '10', name: 'Order Status', type: 'field-map', sourceField: 'order_status', targetField: 'order.status', transformation: 'String(value || "active").toLowerCase() === "pending" ? "active" : String(value || "active").toLowerCase()' },
+          { id: '11', name: 'Order Priority', type: 'field-map', sourceField: 'priority', targetField: 'order.priority', transformation: 'String(value || "ROUTINE").toUpperCase()' },
+          { id: '12', name: 'Order Category Metadata', type: 'field-map', sourceField: 'order_category', targetField: 'metadata.orderCategory', transformation: 'String(value || sourceMessage.order || "").toUpperCase()' },
+          { id: '13', name: 'Target AE', type: 'field-map', sourceField: 'targetAE', targetField: 'metadata.targetAE', transformation: 'String(value || sourceMessage.targetAe || sourceMessage.destination_ae || "")' },
+          { id: '14', name: 'Patient Id', type: 'field-map', sourceField: 'clientId', targetField: 'patient.id', transformation: 'String(value || sourceMessage.client?._id || sourceMessage.client?.id || "unknown-patient")' },
+          { id: '15', name: 'Patient Identifier Value', type: 'field-map', sourceField: 'clientId', targetField: 'patient.identifier[0].value', transformation: 'String(value || sourceMessage.client?._id || sourceMessage.client?.id || "unknown-patient")' },
+          { id: '16', name: 'Patient Identifier System', type: 'field-map', sourceField: '', targetField: 'patient.identifier[0].system', transformation: '"urn:healthstack:patient"' },
+          { id: '17', name: 'Patient Family Name', type: 'field-map', sourceField: 'client.lastname', targetField: 'patient.name.family', transformation: 'String(value || sourceMessage.clientname || sourceMessage.client?.family || "Unknown")' },
+          { id: '18', name: 'Patient Given Name', type: 'field-map', sourceField: 'client.firstname', targetField: 'patient.name.given[0]', transformation: 'String(value || sourceMessage.client?.given?.[0] || "Patient")' },
+          { id: '19', name: 'Patient Birth Date', type: 'field-map', sourceField: 'client.dob', targetField: 'patient.birthDate', transformation: 'value ? new Date(value).toISOString().split("T")[0] : (sourceMessage.client?.dateOfBirth || undefined)' },
+          { id: '20', name: 'Patient Gender', type: 'field-map', sourceField: 'client.gender', targetField: 'patient.gender', transformation: 'String(value || "unknown").toUpperCase() === "F" ? "female" : String(value || "unknown").toUpperCase() === "M" ? "male" : String(value || "unknown").toLowerCase()' },
         ],
-      }),
-      this.mappingRepo.create({
-        id: 'canonical-order-to-custom-json',
+      },
+      {
         name: 'Canonical Order -> Custom JSON',
         description: 'Example outbound mapping for custom JSON sinks.',
         sourceProtocol: 'CANONICAL',
@@ -571,55 +343,16 @@ export class SeederService implements OnModuleInit {
         version: '1.0.0',
         active: true,
         mappingSteps: [
-          {
-            id: '1',
-            name: 'Order Reference',
-            type: 'field-map',
-            sourceField: 'order.id',
-            targetField: 'orderReference',
-            transformation: 'String(value || "")',
-          },
-          {
-            id: '2',
-            name: 'Patient Id',
-            type: 'field-map',
-            sourceField: 'patient.id',
-            targetField: 'patientId',
-            transformation: 'String(value || sourceMessage.order?.subject?.id || "")',
-          },
-          {
-            id: '3',
-            name: 'Patient Name',
-            type: 'field-map',
-            sourceField: 'patient.name.family',
-            targetField: 'patientName',
-            transformation:
-              '[value, sourceMessage.patient?.name?.given?.[0]].filter(Boolean).join(", ")',
-          },
-          {
-            id: '4',
-            name: 'Requested Test',
-            type: 'field-map',
-            sourceField: 'order.code.display',
-            targetField: 'requestedTest',
-            transformation:
-              'String(value || sourceMessage.order?.code?.code || sourceMessage.metadata?.orderCategory || "Unknown")',
-          },
-          {
-            id: '5',
-            name: 'Normalized Category',
-            type: 'field-map',
-            sourceField: 'metadata.orderCategory',
-            targetField: 'orderCategory',
-            transformation: 'String(value || "")',
-          },
+          { id: '1', name: 'Order Reference', type: 'field-map', sourceField: 'order.id', targetField: 'orderReference', transformation: 'String(value || "")' },
+          { id: '2', name: 'Patient Id', type: 'field-map', sourceField: 'patient.id', targetField: 'patientId', transformation: 'String(value || sourceMessage.order?.subject?.id || "")' },
+          { id: '3', name: 'Patient Name', type: 'field-map', sourceField: 'patient.name.family', targetField: 'patientName', transformation: '[value, sourceMessage.patient?.name?.given?.[0]].filter(Boolean).join(", ")' },
+          { id: '4', name: 'Requested Test', type: 'field-map', sourceField: 'order.code.display', targetField: 'requestedTest', transformation: 'String(value || sourceMessage.order?.code?.code || sourceMessage.metadata?.orderCategory || "Unknown")' },
+          { id: '5', name: 'Normalized Category', type: 'field-map', sourceField: 'metadata.orderCategory', targetField: 'orderCategory', transformation: 'String(value || "")' },
         ],
-      }),
-      this.mappingRepo.create({
-        id: 'canonical-to-lis-order',
+      },
+      {
         name: 'Canonical Order -> LIS Interop Order',
-        description:
-          'Maps the canonical order to the RxSoft LIS CreateInteropOrderDto format.',
+        description: 'Maps the canonical order to the RxSoft LIS CreateInteropOrderDto format.',
         sourceProtocol: 'CANONICAL',
         targetProtocol: ProtocolType.CUSTOM_JSON,
         sourceMessageType: MessageType.ORDER,
@@ -627,263 +360,147 @@ export class SeederService implements OnModuleInit {
         version: '1.0.0',
         active: true,
         mappingSteps: [
-          {
-            id: '1',
-            name: 'Patient ID',
-            type: 'field-map',
-            sourceField: 'order.subject.id',
-            targetField: 'patient.patientId',
-            transformation:
-              'String(value || sourceMessage.patient?.identifier?.[0]?.value || "unknown")',
-          },
-          {
-            id: '2',
-            name: 'First Name',
-            type: 'field-map',
-            sourceField: 'patient.name.given[0]',
-            targetField: 'patient.firstName',
-            transformation: 'String(value || "Patient")',
-          },
-          {
-            id: '3',
-            name: 'Last Name',
-            type: 'field-map',
-            sourceField: 'patient.name.family',
-            targetField: 'patient.lastName',
-            transformation: 'String(value || "Unknown")',
-          },
-          {
-            id: '4',
-            name: 'Date of Birth',
-            type: 'field-map',
-            sourceField: 'patient.birthDate',
-            targetField: 'patient.dateOfBirth',
-            transformation: 'value || undefined',
-          },
-          {
-            id: '5',
-            name: 'Gender',
-            type: 'field-map',
-            sourceField: 'patient.gender',
-            targetField: 'patient.gender',
-            transformation: 'String(value || "unknown")',
-          },
-          {
-            id: '6',
-            name: 'LOINC Code',
-            type: 'field-map',
-            sourceField: 'order.code.code',
-            targetField: 'items[0].loincCode',
-            transformation: 'String(value || "UNKNOWN")',
-          },
-          {
-            id: '7',
-            name: 'Test Name',
-            type: 'field-map',
-            sourceField: 'order.code.display',
-            targetField: 'items[0].testName',
-            transformation: 'String(value || "Unknown")',
-          },
+          { id: '1', name: 'Patient ID', type: 'field-map', sourceField: 'order.subject.id', targetField: 'patient.patientId', transformation: 'String(value || sourceMessage.patient?.identifier?.[0]?.value || "unknown")' },
+          { id: '2', name: 'First Name', type: 'field-map', sourceField: 'patient.name.given[0]', targetField: 'patient.firstName', transformation: 'String(value || "Patient")' },
+          { id: '3', name: 'Last Name', type: 'field-map', sourceField: 'patient.name.family', targetField: 'patient.lastName', transformation: 'String(value || "Unknown")' },
+          { id: '4', name: 'Date of Birth', type: 'field-map', sourceField: 'patient.birthDate', targetField: 'patient.dateOfBirth', transformation: 'value || undefined' },
+          { id: '5', name: 'Gender', type: 'field-map', sourceField: 'patient.gender', targetField: 'patient.gender', transformation: 'String(value || "unknown")' },
+          { id: '6', name: 'LOINC Code', type: 'field-map', sourceField: 'order.code.code', targetField: 'items[0].loincCode', transformation: 'String(value || "UNKNOWN")' },
+          { id: '7', name: 'Test Name', type: 'field-map', sourceField: 'order.code.display', targetField: 'items[0].testName', transformation: 'String(value || "Unknown")' },
         ],
-      }),
+      },
     ]);
   }
 
   private async seedValidations() {
-    await this.validationRepo.save([
-      this.validationRepo.create({
-        id: 'validate-laboratory-loinc-code',
+    await this.validationModel.insertMany([
+      {
         name: 'Validate Laboratory LOINC Code',
-        description:
-          'Ensure laboratory orders reference a valid LOINC code before dispatch.',
+        description: 'Ensure laboratory orders reference a valid LOINC code before dispatch.',
         sourceAE: 'healthstack',
         messageType: MessageType.ORDER,
         enabled: true,
-        conditions: [
-          {
-            field: 'metadata.orderCategory',
-            operator: 'equals',
-            value: 'LABORATORY',
-          },
-        ],
-        action: {
-          type: 'coding-concept-exists',
-          module: 'LOINC',
-          codePath: 'order.code.code',
-          searchMode: 'search',
-          includeMetadata: false,
-        },
-        failureResponse: {
-          statusCode: 422,
-          code: 'LABORATORY_CODE_NOT_FOUND',
-          message:
-            'The canonical order code was not found in the coding concept service for module LOINC.',
-        },
-      }),
-      this.validationRepo.create({
-        id: 'validate-radiology-dicom-code',
+        conditions: [{ field: 'metadata.orderCategory', operator: 'equals', value: 'LABORATORY' }],
+        action: { type: 'coding-concept-exists', module: 'LOINC', codePath: 'order.code.code', searchMode: 'search', includeMetadata: false },
+        failureResponse: { statusCode: 422, code: 'LABORATORY_CODE_NOT_FOUND', message: 'The canonical order code was not found in the coding concept service for module LOINC.' },
+      },
+      {
         name: 'Validate Radiology DICOM Code',
-        description:
-          'Ensure radiology orders reference a valid DICOM code before dispatch.',
+        description: 'Ensure radiology orders reference a valid DICOM code before dispatch.',
         sourceAE: 'healthstack',
         messageType: MessageType.ORDER,
         enabled: true,
-        conditions: [
-          {
-            field: 'metadata.orderCategory',
-            operator: 'equals',
-            value: 'RADIOLOGY',
-          },
-        ],
-        action: {
-          type: 'coding-concept-exists',
-          module: 'DICOM',
-          codePath: 'order.code.code',
-          searchMode: 'search',
-          includeMetadata: false,
-        },
-        failureResponse: {
-          statusCode: 422,
-          code: 'RADIOLOGY_CODE_NOT_FOUND',
-          message:
-            'The canonical order code was not found in the coding concept service for module DICOM.',
-        },
-      }),
+        conditions: [{ field: 'metadata.orderCategory', operator: 'equals', value: 'RADIOLOGY' }],
+        action: { type: 'coding-concept-exists', module: 'DICOM', codePath: 'order.code.code', searchMode: 'search', includeMetadata: false },
+        failureResponse: { statusCode: 422, code: 'RADIOLOGY_CODE_NOT_FOUND', message: 'The canonical order code was not found in the coding concept service for module DICOM.' },
+      },
     ]);
   }
 
   private async seedRouting() {
-    await this.routingRepo.save(
-      this.routingRepo.create({
-        id: 'default-routing',
-        name: 'Default Routing',
-        description: 'Dynamic order routing from Healthstack to downstream systems.',
-        defaultRoute: null as any,
-        routes: [
-          {
-            id: 'route-order-dcm4chee',
-            name: 'Healthstack Order -> DCM4CHEE',
-            description: 'Orders explicitly targeting DCM4CHEE are sent as HL7.',
-            priority: 1,
-            sourceAE: 'healthstack',
-            targetAE: 'dcm4chee',
-            applicationId: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ORM',
-            applicationName: process.env.DCM4CHEE_APPLICATION_NAME || 'DCM4CHEE',
-            applicationIdentifier: {
-              namespaceId: process.env.DCM4CHEE_APPLICATION_NAMESPACE_ID || 'DCM4CHEE_APP',
-              id: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ORM',
-              idType: process.env.DCM4CHEE_APPLICATION_ID_TYPE || 'UUID',
-            },
-            messageType: MessageType.ORDER,
-            protocol: ProtocolType.HL7_V2,
-            conditions: [],
-            enrichmentIds: ['validate-radiology-dicom-code'],
-            enrichmentConfig: {
-              enabled: true,
-              useCodingServer: true,
-              mode: 'search',
-              stopOnLookupMiss: true,
-            },
-            validationIds: ['validate-radiology-dicom-code'],
-            validationConfig: {
-              enabled: true,
-              useCodingServer: true,
-              mode: 'search',
-            },
-            enabled: true,
-            status: RouteStatus.ACTIVE,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+    await this.routingModel.create({
+      name: 'Default Routing',
+      description: 'Dynamic order routing from Healthstack to downstream systems.',
+      defaultRoute: null,
+      routes: [
+        {
+          id: 'route-order-dcm4chee',
+          name: 'Healthstack Order -> DCM4CHEE',
+          description: 'Orders explicitly targeting DCM4CHEE are sent as HL7.',
+          priority: 1,
+          sourceAE: 'healthstack',
+          targetAE: 'dcm4chee',
+          applicationId: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ORM',
+          applicationName: process.env.DCM4CHEE_APPLICATION_NAME || 'DCM4CHEE',
+          applicationIdentifier: {
+            namespaceId: process.env.DCM4CHEE_APPLICATION_NAMESPACE_ID || 'DCM4CHEE_APP',
+            id: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ORM',
+            idType: process.env.DCM4CHEE_APPLICATION_ID_TYPE || 'UUID',
           },
-          {
-            id: 'route-order-openelis',
-            name: 'Healthstack Order -> OpenELIS',
-            description: 'Orders explicitly targeting OpenELIS are sent as FHIR.',
-            priority: 2,
-            sourceAE: 'healthstack',
-            targetAE: 'openelis',
-            applicationId: process.env.OPENELIS_APPLICATION_ID || 'OPENELIS-SR',
-            applicationName: process.env.OPENELIS_APPLICATION_NAME || 'OPENELIS',
-            applicationIdentifier: {
-              namespaceId: process.env.OPENELIS_APPLICATION_NAMESPACE_ID || 'OPENELIS_APP',
-              id: process.env.OPENELIS_APPLICATION_ID || 'OPENELIS-SR',
-              idType: process.env.OPENELIS_APPLICATION_ID_TYPE || 'UUID',
-            },
-            messageType: MessageType.ORDER,
-            protocol: ProtocolType.FHIR_R4,
-            conditions: [],
-            enrichmentIds: ['validate-laboratory-loinc-code'],
-            enrichmentConfig: {
-              enabled: true,
-              useCodingServer: true,
-              mode: 'search',
-              stopOnLookupMiss: true,
-            },
-            validationIds: ['validate-laboratory-loinc-code'],
-            validationConfig: {
-              enabled: true,
-              useCodingServer: true,
-              mode: 'search',
-            },
-            enabled: true,
-            status: RouteStatus.ACTIVE,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+          messageType: MessageType.ORDER,
+          protocol: ProtocolType.HL7_V2,
+          conditions: [],
+          enrichmentIds: ['validate-radiology-dicom-code'],
+          enrichmentConfig: { enabled: true, useCodingServer: true, mode: 'search', stopOnLookupMiss: true },
+          validationIds: ['validate-radiology-dicom-code'],
+          validationConfig: { enabled: true, useCodingServer: true, mode: 'search' },
+          enabled: true,
+          status: RouteStatus.ACTIVE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 'route-order-openelis',
+          name: 'Healthstack Order -> OpenELIS',
+          description: 'Orders explicitly targeting OpenELIS are sent as FHIR.',
+          priority: 2,
+          sourceAE: 'healthstack',
+          targetAE: 'openelis',
+          applicationId: process.env.OPENELIS_APPLICATION_ID || 'OPENELIS-SR',
+          applicationName: process.env.OPENELIS_APPLICATION_NAME || 'OPENELIS',
+          applicationIdentifier: {
+            namespaceId: process.env.OPENELIS_APPLICATION_NAMESPACE_ID || 'OPENELIS_APP',
+            id: process.env.OPENELIS_APPLICATION_ID || 'OPENELIS-SR',
+            idType: process.env.OPENELIS_APPLICATION_ID_TYPE || 'UUID',
           },
-          {
-            id: 'route-patient-default',
-            name: 'Healthstack Patient -> DCM4CHEE',
-            description: 'Patient updates are forwarded to DCM4CHEE as HL7 ADT.',
-            priority: 10,
-            sourceAE: 'healthstack',
-            targetAE: 'dcm4chee',
-            applicationId: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ADT',
-            applicationName: process.env.DCM4CHEE_APPLICATION_NAME || 'DCM4CHEE',
-            applicationIdentifier: {
-              namespaceId: process.env.DCM4CHEE_APPLICATION_NAMESPACE_ID || 'DCM4CHEE_APP',
-              id: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ADT',
-              idType: process.env.DCM4CHEE_APPLICATION_ID_TYPE || 'UUID',
-            },
-            messageType: MessageType.PATIENT,
-            protocol: ProtocolType.HL7_V2,
-            conditions: [],
-            enabled: true,
-            status: RouteStatus.ACTIVE,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+          messageType: MessageType.ORDER,
+          protocol: ProtocolType.FHIR_R4,
+          conditions: [],
+          enrichmentIds: ['validate-laboratory-loinc-code'],
+          enrichmentConfig: { enabled: true, useCodingServer: true, mode: 'search', stopOnLookupMiss: true },
+          validationIds: ['validate-laboratory-loinc-code'],
+          validationConfig: { enabled: true, useCodingServer: true, mode: 'search' },
+          enabled: true,
+          status: RouteStatus.ACTIVE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 'route-patient-default',
+          name: 'Healthstack Patient -> DCM4CHEE',
+          description: 'Patient updates are forwarded to DCM4CHEE as HL7 ADT.',
+          priority: 10,
+          sourceAE: 'healthstack',
+          targetAE: 'dcm4chee',
+          applicationId: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ADT',
+          applicationName: process.env.DCM4CHEE_APPLICATION_NAME || 'DCM4CHEE',
+          applicationIdentifier: {
+            namespaceId: process.env.DCM4CHEE_APPLICATION_NAMESPACE_ID || 'DCM4CHEE_APP',
+            id: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ADT',
+            idType: process.env.DCM4CHEE_APPLICATION_ID_TYPE || 'UUID',
           },
-          {
-            id: 'route-order-rxsoft-lis',
-            name: 'Healthstack Order -> RxSoft LIS',
-            description:
-              'Laboratory orders from HealthStack are routed to RxSoft LIS via CUSTOM_JSON.',
-            priority: 1.5,
-            sourceAE: 'healthstack',
-            targetAE: 'rxsoft-lis',
-            applicationId: process.env.RXSOFT_LIS_APPLICATION_ID || 'RXSOFT-LIS',
-            applicationName: process.env.RXSOFT_LIS_APPLICATION_NAME || 'RxSoft LIS',
-            applicationIdentifier: {
-              namespaceId: process.env.RXSOFT_LIS_APPLICATION_NAMESPACE_ID || 'RXSOFT_LIS_APP',
-              id: process.env.RXSOFT_LIS_APPLICATION_ID || 'RXSOFT-LIS',
-              idType: process.env.RXSOFT_LIS_APPLICATION_ID_TYPE || 'UUID',
-            },
-            messageType: MessageType.ORDER,
-            protocol: ProtocolType.CUSTOM_JSON,
-            conditions: [
-              {
-                field: 'metadata.orderCategory',
-                operator: 'contains',
-                value: 'LAB',
-              },
-            ],
-            mappingId: 'canonical-to-lis-order',
-            enabled: true,
-            status: RouteStatus.ACTIVE,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+          messageType: MessageType.PATIENT,
+          protocol: ProtocolType.HL7_V2,
+          conditions: [],
+          enabled: true,
+          status: RouteStatus.ACTIVE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 'route-order-rxsoft-lis',
+          name: 'Healthstack Order -> RxSoft LIS',
+          description: 'Laboratory orders from HealthStack are routed to RxSoft LIS via CUSTOM_JSON.',
+          priority: 1.5,
+          sourceAE: 'healthstack',
+          targetAE: 'rxsoft-lis',
+          applicationId: process.env.RXSOFT_LIS_APPLICATION_ID || 'RXSOFT-LIS',
+          applicationName: process.env.RXSOFT_LIS_APPLICATION_NAME || 'RxSoft LIS',
+          applicationIdentifier: {
+            namespaceId: process.env.RXSOFT_LIS_APPLICATION_NAMESPACE_ID || 'RXSOFT_LIS_APP',
+            id: process.env.RXSOFT_LIS_APPLICATION_ID || 'RXSOFT-LIS',
+            idType: process.env.RXSOFT_LIS_APPLICATION_ID_TYPE || 'UUID',
           },
-        ],
-      }),
-    );
+          messageType: MessageType.ORDER,
+          protocol: ProtocolType.CUSTOM_JSON,
+          conditions: [{ field: 'metadata.orderCategory', operator: 'contains', value: 'LAB' }],
+          mappingId: 'canonical-to-lis-order',
+          enabled: true,
+          status: RouteStatus.ACTIVE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+    });
   }
 }

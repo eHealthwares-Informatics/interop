@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../../app.module';
 import { MockReceiverService } from '../services/mock-receiver.service';
+import { startMongo, stopMongo } from './test-mongo.helper';
 
 jest.setTimeout(20000);
 
@@ -11,7 +12,10 @@ describe('Message Flow E2E', () => {
   let mockReceiver: MockReceiverService;
 
   beforeAll(async () => {
-    process.env.DB_TYPE = 'sqlite';
+    const uri = await startMongo();
+
+    process.env.MONGODB_URI = uri;
+    process.env.MONGODB_NAME = 'test';
     process.env.MOCK_DCM4CHEE_HL7_PORT = '19080';
     process.env.MOCK_OPENELIS_FHIR_PORT = '19081';
     process.env.MOCK_CUSTOM_JSON_PORT = '19082';
@@ -36,6 +40,7 @@ describe('Message Flow E2E', () => {
     if (app) {
       await app.close();
     }
+    await stopMongo();
   });
 
   beforeEach(() => {
@@ -126,27 +131,13 @@ describe('Message Flow E2E', () => {
           status: 'active',
           intent: 'order',
           priority: 'routine',
-          category: [
-            {
-              text: 'LABORATORY',
-            },
-          ],
+          category: [{ text: 'LABORATORY' }],
           code: {
             text: 'Complete Blood Count',
-            coding: [
-              {
-                system: 'urn:test',
-                code: 'CBC',
-                display: 'Complete Blood Count',
-              },
-            ],
+            coding: [{ system: 'urn:test', code: 'CBC', display: 'Complete Blood Count' }],
           },
-          subject: {
-            reference: 'Patient/patient-fhir-lab-1',
-          },
-          requester: {
-            reference: 'Practitioner/doc-fhir-lab-1',
-          },
+          subject: { reference: 'Patient/patient-fhir-lab-1' },
+          requester: { reference: 'Practitioner/doc-fhir-lab-1' },
           authoredOn: '2026-04-25T10:15:00.000Z',
         },
       })
@@ -161,9 +152,7 @@ describe('Message Flow E2E', () => {
     expect(snapshot.fhirResources[0]).toMatchObject({
       resourceType: 'ServiceRequest',
       id: 'fhir-lab-1',
-      subject: {
-        reference: 'Patient/patient-fhir-lab-1',
-      },
+      subject: { reference: 'Patient/patient-fhir-lab-1' },
     });
   });
 });

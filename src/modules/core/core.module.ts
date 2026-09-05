@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { MessagePipelineService } from './services';
 import { AEModule } from '../ae/ae.module';
 import { RoutingModule } from '../routing/routing.module';

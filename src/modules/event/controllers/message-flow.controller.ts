@@ -1,24 +1,24 @@
 import { Controller, Get, Param, Post, Body, Query } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { MessageFlowService } from '../services/message-flow.service';
-import { ApplicationEntityEntity } from '../../core/entities/application-entity.entity';
-import { RoutingTableEntity } from '../../core/entities/routing-table.entity';
-import { StandardMappingEntity } from '../../core/entities/standard-mapping.entity';
-import { ValidationRuleEntity } from '../../core/entities/validation-rule.entity';
+import { ApplicationEntity } from '../../core/schemas/application-entity.schema';
+import { RoutingTableSchema } from '../../core/schemas/routing-table.schema';
+import { StandardMappingSchema } from '../../core/schemas/standard-mapping.schema';
+import { ValidationRuleSchema } from '../../core/schemas/validation-rule.schema';
 
 @Controller('v1/flow')
 export class MessageFlowController {
   constructor(
     private readonly flowService: MessageFlowService,
-    @InjectRepository(ApplicationEntityEntity)
-    private readonly aeRepository: Repository<ApplicationEntityEntity>,
-    @InjectRepository(RoutingTableEntity)
-    private readonly routingRepository: Repository<RoutingTableEntity>,
-    @InjectRepository(StandardMappingEntity)
-    private readonly mappingRepository: Repository<StandardMappingEntity>,
-    @InjectRepository(ValidationRuleEntity)
-    private readonly validationRepository: Repository<ValidationRuleEntity>,
+    @InjectModel(ApplicationEntity.name)
+    private readonly aeModel: Model<ApplicationEntity>,
+    @InjectModel(RoutingTableSchema.name)
+    private readonly routingModel: Model<RoutingTableSchema>,
+    @InjectModel(StandardMappingSchema.name)
+    private readonly mappingModel: Model<StandardMappingSchema>,
+    @InjectModel(ValidationRuleSchema.name)
+    private readonly validationModel: Model<ValidationRuleSchema>,
   ) {}
 
   @Post('healthstack/order')
@@ -90,10 +90,10 @@ export class MessageFlowController {
 
   @Get('topology')
   async getTopology() {
-    const applicationEntities = await this.aeRepository.find();
-    const routingTables = await this.routingRepository.find();
-    const mappings = await this.mappingRepository.find();
-    const validationRules = await this.validationRepository.find();
+    const applicationEntities = await this.aeModel.find().exec();
+    const routingTables = await this.routingModel.find().exec();
+    const mappings = await this.mappingModel.find().exec();
+    const validationRules = await this.validationModel.find().exec();
     return { applicationEntities, routingTables, mappings, validationRules };
   }
 

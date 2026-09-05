@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { ValidationRuleEntity } from '../core/entities';
+import { MongooseModule } from '@nestjs/mongoose';
+import { ValidationRuleSchema, ValidationRuleSchemas } from '../core/schemas';
 import { ValidationController } from './controllers';
 import {
   CodingConceptClientService,
@@ -12,7 +12,7 @@ import {
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([ValidationRuleEntity]),
+    MongooseModule.forFeature([{ name: ValidationRuleSchema.name, schema: ValidationRuleSchemas }]),
   ],
   controllers: [ValidationController],
   providers: [

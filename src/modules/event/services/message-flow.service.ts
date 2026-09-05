@@ -320,7 +320,7 @@ export class MessageFlowService {
         },
       );
 
-      await this.dispatchMessage(targetAE, targetProtocol, outboundMessage, messageType);
+      await this.dispatchMessage(targetAE, targetProtocol, outboundMessage, messageType, canonicalMessage, enrichmentResult.context);
 
       await this.recordEvent(context, EventType.MESSAGE_SENT, MessageStatus.SENT, {
         targetAE: targetAE.id,
@@ -637,6 +637,8 @@ export class MessageFlowService {
     protocol: ProtocolType,
     outboundMessage: any,
     messageType: MessageType,
+    canonicalMessage?: CanonicalFlowMessage,
+    enrichmentContext?: EnrichmentContext,
   ): Promise<void> {
     const config = this.resolveProtocolConfig(targetAE, protocol, 'outbound');
 
@@ -646,7 +648,14 @@ export class MessageFlowService {
     }
 
     if (protocol === ProtocolType.FHIR_R4) {
-      await this.fhirBridge.sendResource(buildHttpBaseUrl(config), outboundMessage);
+      const baseUrl = buildHttpBaseUrl(config);
+
+      // Resolve patient before sending ServiceRequest
+      if (outboundMessage.resourceType === 'ServiceRequest') {
+        await this.resolvePatientForFhirOrder(baseUrl, outboundMessage, config, canonicalMessage, enrichmentContext);
+      }
+
+      await this.fhirBridge.sendResource(baseUrl, outboundMessage, config);
       return;
     }
 
@@ -658,6 +667,78 @@ export class MessageFlowService {
     throw new Error(
       `Unsupported outbound protocol ${protocol} for message type ${messageType}`,
     );
+  }
+
+  private async resolvePatientForFhirOrder(
+    baseUrl: string,
+    outboundMessage: any,
+    config: ProtocolConfig,
+    canonicalMessage?: CanonicalFlowMessage,
+    enrichmentContext?: EnrichmentContext,
+  ): Promise<void> {
+    if (!outboundMessage.subject?.reference) {
+      return;
+    }
+
+    const patientRef = outboundMessage.subject.reference;
+    const patientId = patientRef.replace('Patient/', '');
+
+    if (!patientId || patientId === 'unknown') {
+      return;
+    }
+
+    // Check if patient exists in OpenELIS
+    try {
+      await this.fhirBridge.getResource(baseUrl, 'Patient', patientId, config);
+      return;
+    } catch (err) {
+      if (err.response?.status !== 404) {
+        this.logger.warn(`Unexpected error checking patient ${patientId}: ${err.message}`);
+        return;
+      }
+    }
+
+    // Patient not found — create via FHIR
+    const patientResource = this.buildPatientResource(patientId, canonicalMessage, enrichmentContext);
+    if (!patientResource) {
+      this.logger.warn(`Cannot build patient resource for ${patientId}, skipping creation`);
+      return;
+    }
+
+    try {
+      await this.fhirBridge.sendResource(baseUrl, patientResource, config);
+      this.logger.log(`Created missing patient ${patientId} in OpenELIS`);
+    } catch (err) {
+      this.logger.error(`Failed to create patient ${patientId}: ${err.message}`);
+    }
+  }
+
+  private buildPatientResource(
+    patientId: string,
+    canonicalMessage?: CanonicalFlowMessage,
+    enrichmentContext?: EnrichmentContext,
+  ): any {
+    const patient = canonicalMessage?.patient;
+    if (!patient) {
+      return {
+        resourceType: 'Patient',
+        id: patientId,
+        identifier: [{ system: 'urn:rxsoft:switch:patient', value: patientId }],
+        name: [{ family: 'Unknown', given: ['Patient'] }],
+        gender: 'unknown',
+      };
+    }
+
+    return {
+      resourceType: 'Patient',
+      id: patientId,
+      identifier: patient.identifier || [{ system: 'urn:rxsoft:switch:patient', value: patient.id || patientId }],
+      name: patient.name?.family
+        ? [{ family: patient.name.family, given: patient.name.given || ['Patient'] }]
+        : [{ family: 'Unknown', given: ['Patient'] }],
+      gender: patient.gender || 'unknown',
+      birthDate: patient.birthDate,
+    };
   }
 
   private resolveProtocolConfig(
@@ -967,7 +1048,8 @@ function buildHl7MshSegment(
 }
 
 function buildHttpBaseUrl(config: ProtocolConfig): string {
-  const base = `http://${config.host}:${config.port}`;
+  const protocol = config.port === 443 ? 'https' : 'http';
+  const base = `${protocol}://${config.host}:${config.port}`;
   return config.basePath ? `${base}${config.basePath}` : base;
 }
 

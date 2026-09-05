@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { randomUUID } from 'crypto';
-import { ApplicationEntityEntity } from '../../core/entities';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ApplicationEntity, ApplicationEntityDocument } from '../../core/schemas';
 import {
   ApplicationEntityContract,
   AECreatePayload,
@@ -16,27 +15,24 @@ export class AERegistryService {
   private readonly logger = new Logger(AERegistryService.name);
 
   constructor(
-    @InjectRepository(ApplicationEntityEntity)
-    private aeRepository: Repository<ApplicationEntityEntity>,
+    @InjectModel(ApplicationEntity.name)
+    private aeModel: Model<ApplicationEntity>,
   ) {}
 
   async registerAE(aeContract: AECreatePayload): Promise<ApplicationEntityContract> {
-    const id = randomUUID();
-    const ae = this.aeRepository.create({
-      id,
-      ...aeContract,
-    });
-    const saved = await this.aeRepository.save(ae);
-    this.logger.log(`AE registered: ${saved.id} (${saved.name})`);
-    return saved;
+    const ae = new this.aeModel(aeContract);
+    const saved = await ae.save();
+    this.logger.log(`AE registered: ${saved._id} (${saved.name})`);
+    return saved as unknown as ApplicationEntityContract;
   }
 
   async getAE(id: string): Promise<ApplicationEntityContract | null> {
-    return this.aeRepository.findOne({ where: { id } });
+    const doc = await this.aeModel.findOne({ _id: id, deletedAt: null });
+    return doc as unknown as ApplicationEntityContract | null;
   }
 
   async getAEByName(name: string): Promise<ApplicationEntityContract | null> {
-    return this.aeRepository.findOne({ where: { name } });
+    return this.aeModel.findOne({ name, deletedAt: null }) as unknown as ApplicationEntityContract | null;
   }
 
   async listAEs(query: {
@@ -44,28 +40,31 @@ export class AERegistryService {
     limit?: number;
     filters: Record<string, any>;
   }): Promise<ListResult<ApplicationEntityContract>> {
-    const qb = this.aeRepository.createQueryBuilder('ae');
-    const result = await executeListQuery(qb, 'ae', query);
-    return result;;
+    const baseFilter: Record<string, any> = { deletedAt: null };
+    const result = await executeListQuery(this.aeModel, baseFilter, query);
+    return result as ListResult<ApplicationEntityContract>;
   }
 
   async updateAE(
     id: string,
     updates: AEUpdatePayload,
   ): Promise<ApplicationEntityContract> {
-    await this.aeRepository.update(id, updates as any);
-    const updated = await this.getAE(id);
+    const doc = await this.aeModel.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true },
+    );
     this.logger.log(`AE updated: ${id}`);
-    return updated!;
+    return doc as unknown as ApplicationEntityContract;
   }
 
   async deactivateAE(id: string): Promise<void> {
-    await this.updateAE(id, { status: AEStatus.INACTIVE });
+    await this.aeModel.findByIdAndUpdate(id, { $set: { status: AEStatus.INACTIVE } });
     this.logger.log(`AE deactivated: ${id}`);
   }
 
   async deleteAE(id: string): Promise<void> {
-    await this.aeRepository.softDelete(id);
+    await this.aeModel.findByIdAndUpdate(id, { $set: { deletedAt: new Date() } });
     this.logger.log(`AE deleted: ${id}`);
   }
 
@@ -73,19 +72,13 @@ export class AERegistryService {
     protocol: ProtocolType,
     direction: 'inbound' | 'outbound',
   ): Promise<ApplicationEntityContract[]> {
-    const query = this.aeRepository.createQueryBuilder('ae');
-
-    if (direction === 'inbound') {
-      query.where(':protocol = ANY(ae.inboundCapabilities)', {
-        protocol,
-      });
-    } else {
-      query.where(':protocol = ANY(ae.outboundCapabilities)', {
-        protocol,
-      });
-    }
-
-    return query.andWhere('ae.status = :status', { status: AEStatus.ACTIVE }).getMany();
+    const capField = direction === 'inbound' ? 'inboundCapabilities' : 'outboundCapabilities';
+    const docs = await this.aeModel.find({
+      [capField]: protocol,
+      status: AEStatus.ACTIVE,
+      deletedAt: null,
+    }).exec();
+    return docs as unknown as ApplicationEntityContract[];
   }
 
   async validateAEAccess(
@@ -127,7 +120,6 @@ export class AERegistryService {
       };
     }
 
-    // Simple validation - in real implementation, would test actual connectivity
     const hasInbound = ae.inboundConfig?.length > 0;
     const hasOutbound = ae.outboundConfig?.length > 0;
 
@@ -145,13 +137,9 @@ export class AERegistryService {
     byProtocol: Record<string, number>;
     byStatus: Record<string, number>;
   }> {
-    const total = await this.aeRepository.count();
-    const active = await this.aeRepository.count({
-      where: { status: AEStatus.ACTIVE },
-    });
-    const inactive = await this.aeRepository.count({
-      where: { status: AEStatus.INACTIVE },
-    });
+    const total = await this.aeModel.countDocuments({ deletedAt: null });
+    const active = await this.aeModel.countDocuments({ status: AEStatus.ACTIVE, deletedAt: null });
+    const inactive = await this.aeModel.countDocuments({ status: AEStatus.INACTIVE, deletedAt: null });
 
     return {
       totalAEs: total,

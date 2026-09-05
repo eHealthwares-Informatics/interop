@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { randomUUID } from 'crypto';
-import { RoutingTableEntity } from '../../core/entities';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { RoutingTableSchema, RoutingTableDocument } from '../../core/schemas';
 import {
   RoutingTable,
   RoutingRule,
@@ -19,33 +18,27 @@ export class RoutingEngineService {
   private routingCache = new Map<string, RoutingTable>();
 
   constructor(
-    @InjectRepository(RoutingTableEntity)
-    private routingRepository: Repository<RoutingTableEntity>,
+    @InjectModel(RoutingTableSchema.name)
+    private routingModel: Model<RoutingTableSchema>,
   ) {}
 
   async createRoutingTable(
     name: string,
     description?: string,
   ): Promise<RoutingTable> {
-    const id = randomUUID();
-    const table = this.routingRepository.create({
-      id,
-      name,
-      description,
-      routes: [],
-    });
-    const saved = await this.routingRepository.save(table);
-    this.routingCache.set(id, saved);
-    this.logger.log(`Routing table created: ${saved.id}`);
-    return saved;
+    const table = new this.routingModel({ name, description, routes: [] });
+    const saved = await table.save();
+    this.routingCache.set(saved._id.toString(), saved as unknown as RoutingTable);
+    this.logger.log(`Routing table created: ${saved._id}`);
+    return saved as unknown as RoutingTable;
   }
 
   async getRoutingTable(id: string): Promise<RoutingTable | null> {
     let table = this.routingCache.get(id);
     if (!table) {
-      const entity = await this.routingRepository.findOne({ where: { id } });
-      if (entity) {
-        table = entity as unknown as RoutingTable;
+      const doc = await this.routingModel.findById(id).exec();
+      if (doc) {
+        table = doc as unknown as RoutingTable;
         this.routingCache.set(id, table);
       }
     }
@@ -53,8 +46,8 @@ export class RoutingEngineService {
   }
 
   async getRoutingTableByName(name: string): Promise<RoutingTable | null> {
-    const entity = await this.routingRepository.findOne({ where: { name } });
-    return entity as RoutingTable | null;
+    const doc = await this.routingModel.findOne({ name }).exec();
+    return doc as RoutingTable | null;
   }
 
   async addRoute(
@@ -67,7 +60,7 @@ export class RoutingEngineService {
     }
 
     const newRoute: RoutingRule = {
-      id: randomUUID(),
+      id: tableId,
       ...route,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -80,7 +73,7 @@ export class RoutingEngineService {
     table.routes.push(newRoute);
     table.routes.sort((a: any, b: any) => a.priority - b.priority);
 
-    await this.routingRepository.update(tableId, { routes: table.routes as any });
+    await this.routingModel.findByIdAndUpdate(tableId, { $set: { routes: table.routes } });
     this.routingCache.delete(tableId);
     this.logger.log(
       `Route added to table ${tableId}: ${route.sourceAE} -> ${route.targetAE}`,
@@ -102,7 +95,6 @@ export class RoutingEngineService {
       };
     }
 
-    // Sort by priority and evaluate
     const sortedRoutes = [...(table.routes || [])].sort(
       (a, b) => a.priority - b.priority,
     );
@@ -136,7 +128,6 @@ export class RoutingEngineService {
       }
     }
 
-    // Try default route
     if (table.defaultRoute) {
       const defaultRoute = (table.routes || []).find(
         (r) => r.id === table.defaultRoute,

@@ -2,10 +2,9 @@ import {
   Injectable,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'crypto';
-import { In, Repository } from 'typeorm';
-import { ValidationRuleEntity } from '../../core/entities';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ValidationRuleSchema } from '../../core/schemas';
 import {
   RoutingRule,
   ValidationExecutionResult,
@@ -17,32 +16,26 @@ import { CodingConceptClientService } from './coding-concept-client.service';
 @Injectable()
 export class ValidationRuleService {
   constructor(
-    @InjectRepository(ValidationRuleEntity)
-    private readonly validationRepository: Repository<ValidationRuleEntity>,
+    @InjectModel(ValidationRuleSchema.name)
+    private readonly validationModel: Model<ValidationRuleSchema>,
     private readonly codingConceptClient: CodingConceptClientService,
   ) {}
 
   async create(
     payload: Omit<ValidationRule, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<ValidationRule> {
-    const entity = this.validationRepository.create({
-      id: randomUUID(),
-      ...payload,
-    });
-
-    const saved = await this.validationRepository.save(entity);
+    const entity = new this.validationModel(payload);
+    const saved = await entity.save();
     return saved as unknown as ValidationRule;
   }
 
   async list(): Promise<ValidationRule[]> {
-    const rules = await this.validationRepository.find({
-      order: { name: 'ASC' },
-    });
+    const rules = await this.validationModel.find().sort({ name: 1 }).exec();
     return rules as unknown as ValidationRule[];
   }
 
   async get(id: string): Promise<ValidationRule | null> {
-    const rule = await this.validationRepository.findOne({ where: { id } });
+    const rule = await this.validationModel.findById(id).exec();
     return rule as ValidationRule | null;
   }
 
@@ -50,12 +43,12 @@ export class ValidationRuleService {
     id: string,
     updates: Partial<ValidationRule>,
   ): Promise<ValidationRule | null> {
-    await this.validationRepository.update(id, updates as any);
+    await this.validationModel.findByIdAndUpdate(id, { $set: updates }).exec();
     return this.get(id);
   }
 
   async delete(id: string): Promise<void> {
-    await this.validationRepository.delete(id);
+    await this.validationModel.findByIdAndDelete(id).exec();
   }
 
   async evaluateRouteValidations(
@@ -70,14 +63,14 @@ export class ValidationRuleService {
       return [];
     }
 
-    const rules = await this.validationRepository.findBy({
-      id: In(route.validationIds),
-    });
+    const rules = await this.validationModel.find({
+      _id: { $in: route.validationIds },
+    }).exec();
     const orderedRules = route.validationIds
       .map((validationId) =>
-        rules.find((rule) => rule.id === validationId),
+        rules.find((rule) => rule._id.toString() === validationId),
       )
-      .filter(Boolean) as ValidationRuleEntity[];
+      .filter(Boolean) as ValidationRuleSchema[];
 
     const results: ValidationExecutionResult[] = [];
 
@@ -111,7 +104,7 @@ export class ValidationRuleService {
 
       if (concept?.skipped) { 
         results.push({
-          id: rule.id,
+          id: rule._id.toString(),
           name: rule.name,
           passed: true,
           codeValue,
@@ -123,7 +116,7 @@ export class ValidationRuleService {
 
       if (concept && !concept.skipped) {
         results.push({
-          id: rule.id,
+          id: rule._id.toString(),
           name: rule.name,
           passed: true,
           codeValue,
@@ -142,7 +135,7 @@ export class ValidationRuleService {
       };
 
       results.push({
-        id: rule.id,
+        id: rule._id.toString(),
         name: rule.name,
         passed: false,
         codeValue,
@@ -156,7 +149,7 @@ export class ValidationRuleService {
         routeId: route.id,
         targetAE: route.targetAE,
         validation: {
-          id: rule.id,
+          id: rule._id.toString(),
           name: rule.name,
           module: rule.action.module,
           codeValue,

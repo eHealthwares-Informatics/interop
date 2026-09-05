@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { RoutingController } from './controllers';
 import { RoutingEngineService } from './services';
-import { RoutingTableEntity } from '../core/entities';
+import { RoutingTableSchema, RoutingTableSchemas } from '../core/schemas';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([RoutingTableEntity])],
+  imports: [MongooseModule.forFeature([{ name: RoutingTableSchema.name, schema: RoutingTableSchemas }])],
   controllers: [RoutingController],
   providers: [RoutingEngineService],
   exports: [RoutingEngineService],

@@ -1,20 +1,24 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { SeederService } from './seeder.service';
 import {
-  ApplicationEntityEntity,
-  RoutingTableEntity,
-  StandardMappingEntity,
-  ValidationRuleEntity,
-} from '../modules/core/entities';
+  ApplicationEntity,
+  ApplicationEntitySchema,
+  RoutingTableSchema,
+  RoutingTableSchemas,
+  StandardMappingSchema,
+  StandardMappingSchemas,
+  ValidationRuleSchema,
+  ValidationRuleSchemas,
+} from '../modules/core/schemas';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      ApplicationEntityEntity,
-      RoutingTableEntity,
-      StandardMappingEntity,
-      ValidationRuleEntity,
+    MongooseModule.forFeature([
+      { name: ApplicationEntity.name, schema: ApplicationEntitySchema },
+      { name: RoutingTableSchema.name, schema: RoutingTableSchemas },
+      { name: StandardMappingSchema.name, schema: StandardMappingSchemas },
+      { name: ValidationRuleSchema.name, schema: ValidationRuleSchemas },
     ]),
   ],
   providers: [SeederService],

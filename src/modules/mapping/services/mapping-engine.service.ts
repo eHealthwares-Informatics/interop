@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { randomUUID } from 'crypto';
-import { StandardMappingEntity } from '../../core/entities';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { StandardMappingSchema, StandardMappingDocument } from '../../core/schemas';
 import {
   StandardMapping,
   MappingResult,
@@ -19,36 +18,31 @@ export class MappingEngineService implements MappingEngine {
   private readonly logger = new Logger(MappingEngineService.name);
 
   constructor(
-    @InjectRepository(StandardMappingEntity)
-    private mappingRepository: Repository<StandardMappingEntity>,
+    @InjectModel(StandardMappingSchema.name)
+    private mappingModel: Model<StandardMappingSchema>,
   ) {}
 
   async createMapping(
     mapping: Omit<StandardMapping, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<StandardMapping> {
-    const id = randomUUID();
-    const entity = this.mappingRepository.create({
-      id,
-      ...mapping,
-    });
-    const saved = await this.mappingRepository.save(entity);
-    this.logger.log(`Mapping created: ${saved.id} (${saved.name})`);
+    const entity = new this.mappingModel(mapping);
+    const saved = await entity.save();
+    this.logger.log(`Mapping created: ${saved._id} (${saved.name})`);
     return saved as unknown as StandardMapping;
   }
 
   async getMapping(id: string): Promise<StandardMapping | null> {
-    const entity = await this.mappingRepository.findOne({ where: { id } });
-    return entity as StandardMapping | null;
+    const doc = await this.mappingModel.findById(id).exec();
+    return doc as unknown as StandardMapping | null;
   }
 
   async updateMapping(
     id: string,
     updates: Partial<StandardMapping>,
   ): Promise<StandardMapping> {
-    await this.mappingRepository.update(id, updates as any);
-    const updated = await this.getMapping(id);
+    const doc = await this.mappingModel.findByIdAndUpdate(id, { $set: updates }, { new: true }).exec();
     this.logger.log(`Mapping updated: ${id}`);
-    return updated!;
+    return doc as unknown as StandardMapping;
   }
 
   async listMappings(
@@ -58,26 +52,13 @@ export class MappingEngineService implements MappingEngine {
       active?: boolean;
     },
   ): Promise<StandardMapping[]> {
-    const query = this.mappingRepository.createQueryBuilder('m');
+    const filter: Record<string, any> = {};
+    if (filters?.sourceProtocol) filter.sourceProtocol = filters.sourceProtocol;
+    if (filters?.targetProtocol) filter.targetProtocol = filters.targetProtocol;
+    if (filters?.active !== undefined) filter.active = filters.active;
 
-    if (filters?.sourceProtocol) {
-      query.andWhere('m.sourceProtocol = :sourceProtocol', {
-        sourceProtocol: filters.sourceProtocol,
-      });
-    }
-
-    if (filters?.targetProtocol) {
-      query.andWhere('m.targetProtocol = :targetProtocol', {
-        targetProtocol: filters.targetProtocol,
-      });
-    }
-
-    if (filters?.active !== undefined) {
-      query.andWhere('m.active = :active', { active: filters.active });
-    }
-
-    const entities = await query.getMany();
-    return entities as unknown as StandardMapping[];
+    const docs = await this.mappingModel.find(filter).exec();
+    return docs as unknown as StandardMapping[];
   }
 
   async mapMessage(
@@ -105,7 +86,6 @@ export class MappingEngineService implements MappingEngine {
         lookupCache: context?.lookupCache,
       };
 
-      // Execute mapping steps
       for (const step of mapping.mappingSteps) {
         try {
           const result = await this.executeStep(step, message, mappingContext);

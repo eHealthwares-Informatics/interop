@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AEController } from './controllers';
 import { AERegistryService } from './services';
-import { ApplicationEntityEntity } from '../core/entities';
+import { ApplicationEntity, ApplicationEntitySchema } from '../core/schemas';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ApplicationEntityEntity])],
+  imports: [MongooseModule.forFeature([{ name: ApplicationEntity.name, schema: ApplicationEntitySchema }])],
   controllers: [AEController],
   providers: [AERegistryService],
   exports: [AERegistryService],

@@ -1,16 +1,16 @@
-import { Repository } from 'typeorm';
+import { Model } from 'mongoose';
 import { MessageFlowService } from '../services/message-flow.service';
-import { ApplicationEntityEntity } from '../../core/entities/application-entity.entity';
-import { RoutingTableEntity } from '../../core/entities/routing-table.entity';
-import { StandardMappingEntity } from '../../core/entities/standard-mapping.entity';
-import { ValidationRuleEntity } from '../../core/entities/validation-rule.entity';
+import { ApplicationEntity } from '../../core/schemas/application-entity.schema';
+import { RoutingTableSchema } from '../../core/schemas/routing-table.schema';
+import { StandardMappingSchema } from '../../core/schemas/standard-mapping.schema';
+import { ValidationRuleSchema } from '../../core/schemas/validation-rule.schema';
 export declare class MessageFlowController {
     private readonly flowService;
-    private readonly aeRepository;
-    private readonly routingRepository;
-    private readonly mappingRepository;
-    private readonly validationRepository;
-    constructor(flowService: MessageFlowService, aeRepository: Repository<ApplicationEntityEntity>, routingRepository: Repository<RoutingTableEntity>, mappingRepository: Repository<StandardMappingEntity>, validationRepository: Repository<ValidationRuleEntity>);
+    private readonly aeModel;
+    private readonly routingModel;
+    private readonly mappingModel;
+    private readonly validationModel;
+    constructor(flowService: MessageFlowService, aeModel: Model<ApplicationEntity>, routingModel: Model<RoutingTableSchema>, mappingModel: Model<StandardMappingSchema>, validationModel: Model<ValidationRuleSchema>);
     processOrder(body: {
         hl7Message: string;
         targetAE?: string;
@@ -50,10 +50,34 @@ export declare class MessageFlowController {
         result: import("../services").ProcessMessageResult;
     }>;
     getTopology(): Promise<{
-        applicationEntities: ApplicationEntityEntity[];
-        routingTables: RoutingTableEntity[];
-        mappings: StandardMappingEntity[];
-        validationRules: ValidationRuleEntity[];
+        applicationEntities: (import("mongoose").Document<unknown, {}, ApplicationEntity, {}, import("mongoose").DefaultSchemaOptions> & ApplicationEntity & Required<{
+            _id: import("mongoose").Types.ObjectId;
+        }> & {
+            __v: number;
+        } & {
+            id: string;
+        })[];
+        routingTables: (import("mongoose").Document<unknown, {}, RoutingTableSchema, {}, import("mongoose").DefaultSchemaOptions> & RoutingTableSchema & Required<{
+            _id: import("mongoose").Types.ObjectId;
+        }> & {
+            __v: number;
+        } & {
+            id: string;
+        })[];
+        mappings: (import("mongoose").Document<unknown, {}, StandardMappingSchema, {}, import("mongoose").DefaultSchemaOptions> & StandardMappingSchema & Required<{
+            _id: import("mongoose").Types.ObjectId;
+        }> & {
+            __v: number;
+        } & {
+            id: string;
+        })[];
+        validationRules: (import("mongoose").Document<unknown, {}, ValidationRuleSchema, {}, import("mongoose").DefaultSchemaOptions> & ValidationRuleSchema & Required<{
+            _id: import("mongoose").Types.ObjectId;
+        }> & {
+            __v: number;
+        } & {
+            id: string;
+        })[];
     }>;
     listTraces(limit?: string): Promise<import("../../../common").EventStream[]>;
     getAudit(messageId: string): Promise<import("../../../common").MessageEventAuditEntry>;

@@ -1,12 +1,12 @@
-import { Repository } from 'typeorm';
-import { ApplicationEntityEntity } from '../../core/entities';
+import { Model } from 'mongoose';
+import { ApplicationEntity } from '../../core/schemas';
 import { ApplicationEntityContract, AECreatePayload, AEUpdatePayload } from '../../../common/models';
 import { ProtocolType } from '../../../common/enums';
 import { ListResult } from '../../../common/repository/list';
 export declare class AERegistryService {
-    private aeRepository;
+    private aeModel;
     private readonly logger;
-    constructor(aeRepository: Repository<ApplicationEntityEntity>);
+    constructor(aeModel: Model<ApplicationEntity>);
     registerAE(aeContract: AECreatePayload): Promise<ApplicationEntityContract>;
     getAE(id: string): Promise<ApplicationEntityContract | null>;
     getAEByName(name: string): Promise<ApplicationEntityContract | null>;

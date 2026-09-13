@@ -14,41 +14,35 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ValidationRuleService = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const crypto_1 = require("crypto");
-const typeorm_2 = require("typeorm");
-const entities_1 = require("../../core/entities");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const schemas_1 = require("../../core/schemas");
 const path_util_1 = require("../../../common/utils/path.util");
 const coding_concept_client_service_1 = require("./coding-concept-client.service");
 let ValidationRuleService = class ValidationRuleService {
-    constructor(validationRepository, codingConceptClient) {
-        this.validationRepository = validationRepository;
+    constructor(validationModel, codingConceptClient) {
+        this.validationModel = validationModel;
         this.codingConceptClient = codingConceptClient;
     }
     async create(payload) {
-        const entity = this.validationRepository.create({
-            id: (0, crypto_1.randomUUID)(),
-            ...payload,
-        });
-        const saved = await this.validationRepository.save(entity);
+        const entity = new this.validationModel(payload);
+        const saved = await entity.save();
         return saved;
     }
     async list() {
-        const rules = await this.validationRepository.find({
-            order: { name: 'ASC' },
-        });
+        const rules = await this.validationModel.find().sort({ name: 1 }).exec();
         return rules;
     }
     async get(id) {
-        const rule = await this.validationRepository.findOne({ where: { id } });
+        const rule = await this.validationModel.findById(id).exec();
         return rule;
     }
     async update(id, updates) {
-        await this.validationRepository.update(id, updates);
+        await this.validationModel.findByIdAndUpdate(id, { $set: updates }).exec();
         return this.get(id);
     }
     async delete(id) {
-        await this.validationRepository.delete(id);
+        await this.validationModel.findByIdAndDelete(id).exec();
     }
     async evaluateRouteValidations(route, canonicalMessage) {
         if (!route.validationConfig?.enabled ||
@@ -56,11 +50,11 @@ let ValidationRuleService = class ValidationRuleService {
             !route.validationIds?.length) {
             return [];
         }
-        const rules = await this.validationRepository.findBy({
-            id: (0, typeorm_2.In)(route.validationIds),
-        });
+        const rules = await this.validationModel.find({
+            _id: { $in: route.validationIds },
+        }).exec();
         const orderedRules = route.validationIds
-            .map((validationId) => rules.find((rule) => rule.id === validationId))
+            .map((validationId) => rules.find((rule) => rule._id.toString() === validationId))
             .filter(Boolean);
         const results = [];
         for (const rule of orderedRules) {
@@ -81,7 +75,7 @@ let ValidationRuleService = class ValidationRuleService {
             const concept = await this.codingConceptClient.searchConcept(rule.action.module, codeValue, route.validationConfig?.metadata ?? rule.action.includeMetadata ?? false, route.validationConfig?.mode ?? rule.action.searchMode ?? 'search');
             if (concept?.skipped) {
                 results.push({
-                    id: rule.id,
+                    id: rule._id.toString(),
                     name: rule.name,
                     passed: true,
                     codeValue,
@@ -92,7 +86,7 @@ let ValidationRuleService = class ValidationRuleService {
             }
             if (concept && !concept.skipped) {
                 results.push({
-                    id: rule.id,
+                    id: rule._id.toString(),
                     name: rule.name,
                     passed: true,
                     codeValue,
@@ -108,7 +102,7 @@ let ValidationRuleService = class ValidationRuleService {
                     `Validation failed for rule ${rule.name}`,
             };
             results.push({
-                id: rule.id,
+                id: rule._id.toString(),
                 name: rule.name,
                 passed: false,
                 codeValue,
@@ -121,7 +115,7 @@ let ValidationRuleService = class ValidationRuleService {
                 routeId: route.id,
                 targetAE: route.targetAE,
                 validation: {
-                    id: rule.id,
+                    id: rule._id.toString(),
                     name: rule.name,
                     module: rule.action.module,
                     codeValue,
@@ -151,8 +145,8 @@ let ValidationRuleService = class ValidationRuleService {
 exports.ValidationRuleService = ValidationRuleService;
 exports.ValidationRuleService = ValidationRuleService = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(entities_1.ValidationRuleEntity)),
-    __metadata("design:paramtypes", [typeorm_2.Repository,
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.ValidationRuleSchema.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model,
         coding_concept_client_service_1.CodingConceptClientService])
 ], ValidationRuleService);
 //# sourceMappingURL=validation-rule.service.js.map

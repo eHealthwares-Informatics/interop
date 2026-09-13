@@ -9,8 +9,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ValidationModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
-const typeorm_1 = require("@nestjs/typeorm");
-const entities_1 = require("../core/entities");
+const mongoose_1 = require("@nestjs/mongoose");
+const schemas_1 = require("../core/schemas");
 const controllers_1 = require("./controllers");
 const services_1 = require("./services");
 let ValidationModule = class ValidationModule {
@@ -20,7 +20,7 @@ exports.ValidationModule = ValidationModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule,
-            typeorm_1.TypeOrmModule.forFeature([entities_1.ValidationRuleEntity]),
+            mongoose_1.MongooseModule.forFeature([{ name: schemas_1.ValidationRuleSchema.name, schema: schemas_1.ValidationRuleSchemas }]),
         ],
         controllers: [controllers_1.ValidationController],
         providers: [

@@ -14,42 +14,36 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContextEnrichmentService = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const crypto_1 = require("crypto");
-const typeorm_2 = require("typeorm");
-const entities_1 = require("../../core/entities");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const schemas_1 = require("../../core/schemas");
 const enums_1 = require("../../../common/enums");
 const path_util_1 = require("../../../common/utils/path.util");
 const coding_concept_client_service_1 = require("./coding-concept-client.service");
 let ContextEnrichmentService = class ContextEnrichmentService {
-    constructor(enrichmentRepository, codingConceptClient) {
-        this.enrichmentRepository = enrichmentRepository;
+    constructor(enrichmentModel, codingConceptClient) {
+        this.enrichmentModel = enrichmentModel;
         this.codingConceptClient = codingConceptClient;
     }
     async create(payload) {
-        const entity = this.enrichmentRepository.create({
-            id: (0, crypto_1.randomUUID)(),
-            ...payload,
-        });
-        const saved = await this.enrichmentRepository.save(entity);
+        const entity = new this.enrichmentModel(payload);
+        const saved = await entity.save();
         return saved;
     }
     async list() {
-        const rules = await this.enrichmentRepository.find({
-            order: { name: 'ASC' },
-        });
+        const rules = await this.enrichmentModel.find().sort({ name: 1 }).exec();
         return rules;
     }
     async get(id) {
-        const rule = await this.enrichmentRepository.findOne({ where: { id } });
+        const rule = await this.enrichmentModel.findById(id).exec();
         return rule;
     }
     async update(id, updates) {
-        await this.enrichmentRepository.update(id, updates);
+        await this.enrichmentModel.findByIdAndUpdate(id, { $set: updates }).exec();
         return this.get(id);
     }
     async delete(id) {
-        await this.enrichmentRepository.delete(id);
+        await this.enrichmentModel.findByIdAndDelete(id).exec();
     }
     async resolve(input) {
         const canonicalMessage = input.canonicalMessage ?? {};
@@ -65,11 +59,11 @@ let ContextEnrichmentService = class ContextEnrichmentService {
             enrichmentIds.length === 0) {
             return { context, warnings, errors };
         }
-        const rules = await this.enrichmentRepository.findBy({
-            id: (0, typeorm_2.In)(enrichmentIds),
-        });
+        const rules = await this.enrichmentModel.find({
+            _id: { $in: enrichmentIds },
+        }).exec();
         const orderedRules = enrichmentIds
-            .map((enrichmentId) => rules.find((rule) => rule.id === enrichmentId))
+            .map((enrichmentId) => rules.find((rule) => rule._id.toString() === enrichmentId))
             .filter(Boolean);
         for (const rule of orderedRules) {
             if (!rule.enabled) {
@@ -289,8 +283,8 @@ let ContextEnrichmentService = class ContextEnrichmentService {
 exports.ContextEnrichmentService = ContextEnrichmentService;
 exports.ContextEnrichmentService = ContextEnrichmentService = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(entities_1.ValidationRuleEntity)),
-    __metadata("design:paramtypes", [typeorm_2.Repository,
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.ValidationRuleSchema.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model,
         coding_concept_client_service_1.CodingConceptClientService])
 ], ContextEnrichmentService);
 //# sourceMappingURL=context-enrichment.service.js.map

@@ -8,7 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ModulesModule = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
+const mongoose_1 = require("@nestjs/mongoose");
 const ae_module_1 = require("./ae/ae.module");
 const routing_module_1 = require("./routing/routing.module");
 const mapping_module_1 = require("./mapping/mapping.module");
@@ -17,7 +17,7 @@ const hl7_module_1 = require("./hl7/hl7.module");
 const fhir_module_1 = require("./fhir/fhir.module");
 const core_module_1 = require("./core/core.module");
 const validation_module_1 = require("./validation/validation.module");
-const entities_1 = require("./core/entities");
+const schemas_1 = require("./core/schemas");
 const health_module_1 = require("./health/health.module");
 let ModulesModule = class ModulesModule {
 };
@@ -25,13 +25,13 @@ exports.ModulesModule = ModulesModule;
 exports.ModulesModule = ModulesModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forFeature([
-                entities_1.ApplicationEntityEntity,
-                entities_1.RoutingTableEntity,
-                entities_1.StandardMappingEntity,
-                entities_1.MessageEventEntity,
-                entities_1.EventStreamEntity,
-                entities_1.ValidationRuleEntity,
+            mongoose_1.MongooseModule.forFeature([
+                { name: schemas_1.ApplicationEntity.name, schema: schemas_1.ApplicationEntitySchema },
+                { name: schemas_1.RoutingTableSchema.name, schema: schemas_1.RoutingTableSchemas },
+                { name: schemas_1.StandardMappingSchema.name, schema: schemas_1.StandardMappingSchemas },
+                { name: schemas_1.MessageEventSchema.name, schema: schemas_1.MessageEventSchemas },
+                { name: schemas_1.EventStreamSchema.name, schema: schemas_1.EventStreamSchemas },
+                { name: schemas_1.ValidationRuleSchema.name, schema: schemas_1.ValidationRuleSchemas },
             ]),
             ae_module_1.AEModule,
             routing_module_1.RoutingModule,

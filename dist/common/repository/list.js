@@ -3,89 +3,75 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeListQuery = executeListQuery;
 exports.applyFilters = applyFilters;
 exports.applyFilter = applyFilter;
-async function executeListQuery(qb, alias, query) {
+async function executeListQuery(model, baseFilter, query) {
     const page = Math.max(Number(query.page || 1), 1);
     const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
-    applyFilters(qb, alias, query.filters || {});
-    const [data, total] = await qb
-        .skip((page - 1) * limit)
-        .take(limit)
-        .getManyAndCount();
+    const mongoFilter = { ...baseFilter };
+    applyFilters(mongoFilter, query.filters || {});
+    const [data, total] = await Promise.all([
+        model.find(mongoFilter).skip((page - 1) * limit).limit(limit).exec(),
+        model.countDocuments(mongoFilter),
+    ]);
     const totalPages = Math.ceil(total / limit);
-    const pagination = {
-        page,
-        limit,
-        total,
-        totalPages,
-    };
+    const pagination = { page, limit, total, totalPages };
     return {
-        data,
+        data: data,
         pagination,
         meta: pagination,
     };
 }
-function applyFilters(qb, alias, filters) {
+function applyFilters(mongoFilter, filters) {
     Object.entries(filters).forEach(([field, raw]) => {
         if (!raw)
             return;
-        const { type, value, valueTo } = parseFilter(raw);
-        applyFilter(qb, alias, field, type, value, valueTo);
+        const parsed = parseFilter(raw);
+        applyFilter(mongoFilter, field, parsed);
     });
 }
 function parseFilter(raw) {
     const [type, value, valueTo] = raw.split('|');
-    return {
-        type,
-        value,
-        valueTo,
-    };
+    return { type, value, valueTo };
 }
-function resolveField(alias, field) {
-    return field.includes('.') ? field : `${alias}.${field}`;
-}
-function paramName(field, type) {
-    return `${field.replace('.', '_')}_${type}_${Date.now()}`;
-}
-function applyFilter(qb, alias, field, type, value, valueTo) {
-    const column = resolveField(alias, field);
-    const param = paramName(field, type);
+function applyFilter(mongoFilter, field, filter) {
+    const { type, value, valueTo } = filter;
     switch (type) {
         case 'EQUALS':
-            qb.andWhere(`${column} = :${param}`, { [param]: value });
+            mongoFilter[field] = value;
             break;
         case 'NOT_EQUALS':
-            qb.andWhere(`${column} != :${param}`, { [param]: value });
+            mongoFilter[field] = { $ne: value };
             break;
         case 'CONTAINS':
         case 'FUZZY_MATCH':
-            qb.andWhere(`${column} LIKE :${param}`, {
-                [param]: `%${value}%`,
-            });
+            mongoFilter[field] = { $regex: String(value), $options: 'i' };
             break;
         case 'GREATER_THAN':
-            qb.andWhere(`${column} > :${param}`, { [param]: value });
+            mongoFilter[field] = { $gt: coerce(value) };
             break;
         case 'GREATER_THAN_OR_EQUAL':
-            qb.andWhere(`${column} >= :${param}`, { [param]: value });
+            mongoFilter[field] = { $gte: coerce(value) };
             break;
         case 'LESS_THAN':
-            qb.andWhere(`${column} < :${param}`, { [param]: value });
+            mongoFilter[field] = { $lt: coerce(value) };
             break;
         case 'LESS_THAN_OR_EQUAL':
-            qb.andWhere(`${column} <= :${param}`, { [param]: value });
+            mongoFilter[field] = { $lte: coerce(value) };
             break;
-        case 'BETWEEN': {
-            const from = `${param}_from`;
-            const to = `${param}_to`;
-            qb.andWhere(`${column} BETWEEN :${from} AND :${to}`, {
-                [from]: value,
-                [to]: valueTo,
-            });
+        case 'BETWEEN':
+            mongoFilter[field] = { $gte: coerce(value), $lte: coerce(valueTo) };
             break;
-        }
         case 'MISSING':
-            qb.andWhere(`${column} IS NULL`);
+            mongoFilter[field] = { $exists: false };
             break;
     }
+}
+function coerce(value) {
+    if (value === 'true')
+        return true;
+    if (value === 'false')
+        return false;
+    if (!isNaN(Number(value)))
+        return Number(value);
+    return value;
 }
 //# sourceMappingURL=list.js.map

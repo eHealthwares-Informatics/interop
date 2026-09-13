@@ -101,6 +101,8 @@ export declare class MessageFlowService {
     private toCanonical;
     private fromCanonical;
     private dispatchMessage;
+    private resolvePatientForFhirOrder;
+    private buildPatientResource;
     private resolveProtocolConfig;
     private resolvePreferredProtocol;
     private resolveRoutingTable;

@@ -178,7 +178,7 @@ let MessageFlowService = MessageFlowService_1 = class MessageFlowService {
                 enrichmentWarnings: enrichmentResult.warnings,
                 outboundPreview: outboundMessage,
             });
-            await this.dispatchMessage(targetAE, targetProtocol, outboundMessage, messageType);
+            await this.dispatchMessage(targetAE, targetProtocol, outboundMessage, messageType, canonicalMessage, enrichmentResult.context);
             await this.recordEvent(context, enums_1.EventType.MESSAGE_SENT, enums_1.MessageStatus.SENT, {
                 targetAE: targetAE.id,
                 targetProtocol,
@@ -375,14 +375,19 @@ let MessageFlowService = MessageFlowService_1 = class MessageFlowService {
         }
         throw new Error(`Unsupported outbound protocol: ${protocol}`);
     }
-    async dispatchMessage(targetAE, protocol, outboundMessage, messageType) {
+    async dispatchMessage(targetAE, protocol, outboundMessage, messageType, canonicalMessage, enrichmentContext) {
         const config = this.resolveProtocolConfig(targetAE, protocol, 'outbound');
         if (protocol === enums_1.ProtocolType.HL7_V2) {
             await this.hl7Bridge.sendMessage(config.host, config.port, String(outboundMessage));
             return;
         }
         if (protocol === enums_1.ProtocolType.FHIR_R4) {
-            await this.fhirBridge.sendResource(buildHttpBaseUrl(config), outboundMessage);
+            const baseUrl = buildHttpBaseUrl(config);
+            // Resolve patient before sending ServiceRequest
+            if (outboundMessage.resourceType === 'ServiceRequest') {
+                await this.resolvePatientForFhirOrder(baseUrl, outboundMessage, config, canonicalMessage, enrichmentContext);
+            }
+            await this.fhirBridge.sendResource(baseUrl, outboundMessage, config);
             return;
         }
         if (protocol === enums_1.ProtocolType.CUSTOM_JSON) {
@@ -390,6 +395,62 @@ let MessageFlowService = MessageFlowService_1 = class MessageFlowService {
             return;
         }
         throw new Error(`Unsupported outbound protocol ${protocol} for message type ${messageType}`);
+    }
+    async resolvePatientForFhirOrder(baseUrl, outboundMessage, config, canonicalMessage, enrichmentContext) {
+        if (!outboundMessage.subject?.reference) {
+            return;
+        }
+        const patientRef = outboundMessage.subject.reference;
+        const patientId = patientRef.replace('Patient/', '');
+        if (!patientId || patientId === 'unknown') {
+            return;
+        }
+        // Check if patient exists in OpenELIS
+        try {
+            await this.fhirBridge.getResource(baseUrl, 'Patient', patientId, config);
+            return;
+        }
+        catch (err) {
+            if (err.response?.status !== 404) {
+                this.logger.warn(`Unexpected error checking patient ${patientId}: ${err.message}`);
+                return;
+            }
+        }
+        // Patient not found — create via FHIR
+        const patientResource = this.buildPatientResource(patientId, canonicalMessage, enrichmentContext);
+        if (!patientResource) {
+            this.logger.warn(`Cannot build patient resource for ${patientId}, skipping creation`);
+            return;
+        }
+        try {
+            await this.fhirBridge.sendResource(baseUrl, patientResource, config);
+            this.logger.log(`Created missing patient ${patientId} in OpenELIS`);
+        }
+        catch (err) {
+            this.logger.error(`Failed to create patient ${patientId}: ${err.message}`);
+        }
+    }
+    buildPatientResource(patientId, canonicalMessage, enrichmentContext) {
+        const patient = canonicalMessage?.patient;
+        if (!patient) {
+            return {
+                resourceType: 'Patient',
+                id: patientId,
+                identifier: [{ system: 'urn:rxsoft:switch:patient', value: patientId }],
+                name: [{ family: 'Unknown', given: ['Patient'] }],
+                gender: 'unknown',
+            };
+        }
+        return {
+            resourceType: 'Patient',
+            id: patientId,
+            identifier: patient.identifier || [{ system: 'urn:rxsoft:switch:patient', value: patient.id || patientId }],
+            name: patient.name?.family
+                ? [{ family: patient.name.family, given: patient.name.given || ['Patient'] }]
+                : [{ family: 'Unknown', given: ['Patient'] }],
+            gender: patient.gender || 'unknown',
+            birthDate: patient.birthDate,
+        };
     }
     resolveProtocolConfig(ae, protocol, direction) {
         const configs = direction === 'inbound' ? ae.inboundConfig : ae.outboundConfig;
@@ -619,7 +680,8 @@ function buildHl7MshSegment(messageType, switchAE, targetAE, route) {
     return `MSH|^~\\&|${sendingApplication}|${sendingFacility}|${receivingApplication}|${receivingFacility}|${timestamp}||${triggerEvent}|${(0, crypto_1.randomUUID)()}|P|2.5`;
 }
 function buildHttpBaseUrl(config) {
-    const base = `http://${config.host}:${config.port}`;
+    const protocol = config.port === 443 ? 'https' : 'http';
+    const base = `${protocol}://${config.host}:${config.port}`;
     return config.basePath ? `${base}${config.basePath}` : base;
 }
 function canonicalOrderToFlowOrder(order) {

@@ -1,10 +1,10 @@
-import { Repository } from 'typeorm';
-import { StandardMappingEntity } from '../../core/entities';
+import { Model } from 'mongoose';
+import { StandardMappingSchema } from '../../core/schemas';
 import { StandardMapping, MappingResult, MappingContext, MappingEngine } from '../../../common/models';
 export declare class MappingEngineService implements MappingEngine {
-    private mappingRepository;
+    private mappingModel;
     private readonly logger;
-    constructor(mappingRepository: Repository<StandardMappingEntity>);
+    constructor(mappingModel: Model<StandardMappingSchema>);
     createMapping(mapping: Omit<StandardMapping, 'id' | 'createdAt' | 'updatedAt'>): Promise<StandardMapping>;
     getMapping(id: string): Promise<StandardMapping | null>;
     updateMapping(id: string, updates: Partial<StandardMapping>): Promise<StandardMapping>;

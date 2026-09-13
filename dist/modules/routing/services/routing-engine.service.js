@@ -15,44 +15,37 @@ var RoutingEngineService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoutingEngineService = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const typeorm_2 = require("typeorm");
-const crypto_1 = require("crypto");
-const entities_1 = require("../../core/entities");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const schemas_1 = require("../../core/schemas");
 const path_util_1 = require("../../../common/utils/path.util");
 let RoutingEngineService = RoutingEngineService_1 = class RoutingEngineService {
-    constructor(routingRepository) {
-        this.routingRepository = routingRepository;
+    constructor(routingModel) {
+        this.routingModel = routingModel;
         this.logger = new common_1.Logger(RoutingEngineService_1.name);
         this.routingCache = new Map();
     }
     async createRoutingTable(name, description) {
-        const id = (0, crypto_1.randomUUID)();
-        const table = this.routingRepository.create({
-            id,
-            name,
-            description,
-            routes: [],
-        });
-        const saved = await this.routingRepository.save(table);
-        this.routingCache.set(id, saved);
-        this.logger.log(`Routing table created: ${saved.id}`);
+        const table = new this.routingModel({ name, description, routes: [] });
+        const saved = await table.save();
+        this.routingCache.set(saved._id.toString(), saved);
+        this.logger.log(`Routing table created: ${saved._id}`);
         return saved;
     }
     async getRoutingTable(id) {
         let table = this.routingCache.get(id);
         if (!table) {
-            const entity = await this.routingRepository.findOne({ where: { id } });
-            if (entity) {
-                table = entity;
+            const doc = await this.routingModel.findById(id).exec();
+            if (doc) {
+                table = doc;
                 this.routingCache.set(id, table);
             }
         }
         return table || null;
     }
     async getRoutingTableByName(name) {
-        const entity = await this.routingRepository.findOne({ where: { name } });
-        return entity;
+        const doc = await this.routingModel.findOne({ name }).exec();
+        return doc;
     }
     async addRoute(tableId, route) {
         const table = await this.getRoutingTable(tableId);
@@ -60,7 +53,7 @@ let RoutingEngineService = RoutingEngineService_1 = class RoutingEngineService {
             throw new Error(`Routing table not found: ${tableId}`);
         }
         const newRoute = {
-            id: (0, crypto_1.randomUUID)(),
+            id: tableId,
             ...route,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -70,7 +63,7 @@ let RoutingEngineService = RoutingEngineService_1 = class RoutingEngineService {
         }
         table.routes.push(newRoute);
         table.routes.sort((a, b) => a.priority - b.priority);
-        await this.routingRepository.update(tableId, { routes: table.routes });
+        await this.routingModel.findByIdAndUpdate(tableId, { $set: { routes: table.routes } });
         this.routingCache.delete(tableId);
         this.logger.log(`Route added to table ${tableId}: ${route.sourceAE} -> ${route.targetAE}`);
         return newRoute;
@@ -84,7 +77,6 @@ let RoutingEngineService = RoutingEngineService_1 = class RoutingEngineService {
                 metadata: { error: 'Routing table not found' },
             };
         }
-        // Sort by priority and evaluate
         const sortedRoutes = [...(table.routes || [])].sort((a, b) => a.priority - b.priority);
         for (const route of sortedRoutes) {
             if (!route.enabled)
@@ -114,7 +106,6 @@ let RoutingEngineService = RoutingEngineService_1 = class RoutingEngineService {
                 };
             }
         }
-        // Try default route
         if (table.defaultRoute) {
             const defaultRoute = (table.routes || []).find((r) => r.id === table.defaultRoute);
             if (defaultRoute) {
@@ -175,7 +166,7 @@ let RoutingEngineService = RoutingEngineService_1 = class RoutingEngineService {
 exports.RoutingEngineService = RoutingEngineService;
 exports.RoutingEngineService = RoutingEngineService = RoutingEngineService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(entities_1.RoutingTableEntity)),
-    __metadata("design:paramtypes", [typeorm_2.Repository])
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.RoutingTableSchema.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model])
 ], RoutingEngineService);
 //# sourceMappingURL=routing-engine.service.js.map

@@ -8,16 +8,16 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoutingModule = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
+const mongoose_1 = require("@nestjs/mongoose");
 const controllers_1 = require("./controllers");
 const services_1 = require("./services");
-const entities_1 = require("../core/entities");
+const schemas_1 = require("../core/schemas");
 let RoutingModule = class RoutingModule {
 };
 exports.RoutingModule = RoutingModule;
 exports.RoutingModule = RoutingModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([entities_1.RoutingTableEntity])],
+        imports: [mongoose_1.MongooseModule.forFeature([{ name: schemas_1.RoutingTableSchema.name, schema: schemas_1.RoutingTableSchemas }])],
         controllers: [controllers_1.RoutingController],
         providers: [services_1.RoutingEngineService],
         exports: [services_1.RoutingEngineService],

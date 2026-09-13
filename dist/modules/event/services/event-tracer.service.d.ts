@@ -1,13 +1,13 @@
-import { Repository } from 'typeorm';
-import { MessageEventEntity, EventStreamEntity } from '../../core/entities';
+import { Model } from 'mongoose';
+import { MessageEventSchema, EventStreamSchema } from '../../core/schemas';
 import { MessageEvent, EventStream, EventTracer, MessageEventAuditEntry, EventMetadata } from '../../../common/models';
 import { MessageStatus } from '../../../common/enums';
 export declare class EventTracerService implements EventTracer {
-    private eventRepository;
-    private eventStreamRepository;
+    private eventModel;
+    private eventStreamModel;
     private readonly logger;
     private activeTraces;
-    constructor(eventRepository: Repository<MessageEventEntity>, eventStreamRepository: Repository<EventStreamEntity>);
+    constructor(eventModel: Model<MessageEventSchema>, eventStreamModel: Model<EventStreamSchema>);
     startTrace(messageId: string, correlationId: string): void;
     recordEvent(event: MessageEvent): Promise<void>;
     getEventStream(messageId: string): Promise<EventStream | null>;

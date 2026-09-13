@@ -1,15 +1,15 @@
 import { OnModuleInit } from '@nestjs/common';
-import { Repository } from 'typeorm';
-import { ApplicationEntityEntity } from '../modules/core/entities/application-entity.entity';
-import { RoutingTableEntity } from '../modules/core/entities/routing-table.entity';
-import { StandardMappingEntity } from '../modules/core/entities/standard-mapping.entity';
-import { ValidationRuleEntity } from '../modules/core/entities/validation-rule.entity';
+import { Model } from 'mongoose';
+import { ApplicationEntity } from '../modules/core/schemas/application-entity.schema';
+import { RoutingTableSchema } from '../modules/core/schemas/routing-table.schema';
+import { StandardMappingSchema } from '../modules/core/schemas/standard-mapping.schema';
+import { ValidationRuleSchema } from '../modules/core/schemas/validation-rule.schema';
 export declare class SeederService implements OnModuleInit {
-    private readonly aeRepo;
-    private readonly routingRepo;
-    private readonly mappingRepo;
-    private readonly validationRepo;
-    constructor(aeRepo: Repository<ApplicationEntityEntity>, routingRepo: Repository<RoutingTableEntity>, mappingRepo: Repository<StandardMappingEntity>, validationRepo: Repository<ValidationRuleEntity>);
+    private readonly aeModel;
+    private readonly routingModel;
+    private readonly mappingModel;
+    private readonly validationModel;
+    constructor(aeModel: Model<ApplicationEntity>, routingModel: Model<RoutingTableSchema>, mappingModel: Model<StandardMappingSchema>, validationModel: Model<ValidationRuleSchema>);
     onModuleInit(): Promise<void>;
     private seedAEs;
     private seedMappings;

@@ -15,15 +15,14 @@ var EventTracerService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EventTracerService = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const typeorm_2 = require("typeorm");
-const crypto_1 = require("crypto");
-const entities_1 = require("../../core/entities");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const schemas_1 = require("../../core/schemas");
 const enums_1 = require("../../../common/enums");
 let EventTracerService = EventTracerService_1 = class EventTracerService {
-    constructor(eventRepository, eventStreamRepository) {
-        this.eventRepository = eventRepository;
-        this.eventStreamRepository = eventStreamRepository;
+    constructor(eventModel, eventStreamModel) {
+        this.eventModel = eventModel;
+        this.eventStreamModel = eventStreamModel;
         this.logger = new common_1.Logger(EventTracerService_1.name);
         this.activeTraces = new Map();
     }
@@ -40,12 +39,10 @@ let EventTracerService = EventTracerService_1 = class EventTracerService {
     }
     async recordEvent(event) {
         try {
-            // Save to database
-            await this.eventRepository.save({
+            await new this.eventModel({
                 ...event,
                 correlationId: event.correlationId || event.metadata?.correlationId || '',
-            });
-            // Update active trace
+            }).save();
             const trace = this.activeTraces.get(event.messageId);
             if (trace) {
                 trace.events.push(event);
@@ -62,9 +59,7 @@ let EventTracerService = EventTracerService_1 = class EventTracerService {
         }
     }
     async getEventStream(messageId) {
-        const entity = await this.eventStreamRepository.findOne({
-            where: { messageId },
-        });
+        const entity = await this.eventStreamModel.findOne({ messageId }).exec();
         if (entity) {
             return {
                 messageId: entity.messageId,
@@ -79,10 +74,11 @@ let EventTracerService = EventTracerService_1 = class EventTracerService {
         return null;
     }
     async listRecentTraces(limit = 20) {
-        const entities = await this.eventStreamRepository.find({
-            order: { startTime: 'DESC' },
-            take: limit,
-        });
+        const entities = await this.eventStreamModel
+            .find()
+            .sort({ startTime: -1 })
+            .limit(limit)
+            .exec();
         return entities.map((entity) => ({
             messageId: entity.messageId,
             events: entity.events || [],
@@ -94,17 +90,17 @@ let EventTracerService = EventTracerService_1 = class EventTracerService {
         }));
     }
     async getAuditTrail(messageId) {
-        const events = await this.eventRepository.find({
-            where: { messageId },
-            order: { sequenceNumber: 'ASC' },
-        });
+        const events = await this.eventModel
+            .find({ messageId })
+            .sort({ sequenceNumber: 1 })
+            .exec();
         if (events.length === 0) {
             return null;
         }
         const firstEvent = events[0];
         const lastEvent = events[events.length - 1];
         return {
-            id: (0, crypto_1.randomUUID)(),
+            id: messageId,
             messageId,
             events: events,
             sourceAE: firstEvent.sourceAE,
@@ -114,7 +110,7 @@ let EventTracerService = EventTracerService_1 = class EventTracerService {
             priority: '',
             createdAt: firstEvent.createdAt,
             updatedAt: lastEvent.createdAt,
-            retainedUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
+            retainedUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
         };
     }
     async completeTrace(messageId, finalStatus) {
@@ -127,8 +123,7 @@ let EventTracerService = EventTracerService_1 = class EventTracerService {
         trace.endTime = now;
         trace.totalDuration =
             now.getTime() - trace.startTime.getTime();
-        // Save to database
-        const entity = this.eventStreamRepository.create({
+        const entity = new this.eventStreamModel({
             messageId,
             events: trace.events,
             status: finalStatus,
@@ -137,7 +132,7 @@ let EventTracerService = EventTracerService_1 = class EventTracerService {
             totalDuration: trace.totalDuration,
             errorCount: trace.errorCount,
         });
-        await this.eventStreamRepository.save(entity);
+        await entity.save();
         this.activeTraces.delete(messageId);
         this.logger.log(`Trace completed for message ${messageId} - Duration: ${trace.totalDuration}ms`);
         return trace;
@@ -154,21 +149,19 @@ let EventTracerService = EventTracerService_1 = class EventTracerService {
     }
     async purgeOldTraces(retentionDays = 90) {
         const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-        const result = await this.eventRepository.delete({
-            createdAt: {
-                $lt: cutoffDate,
-            },
+        const result = await this.eventModel.deleteMany({
+            createdAt: { $lt: cutoffDate },
         });
-        this.logger.log(`Purged ${result.affected} old events (before ${cutoffDate})`);
-        return result.affected || 0;
+        this.logger.log(`Purged ${result.deletedCount} old events (before ${cutoffDate})`);
+        return result.deletedCount || 0;
     }
 };
 exports.EventTracerService = EventTracerService;
 exports.EventTracerService = EventTracerService = EventTracerService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(entities_1.MessageEventEntity)),
-    __param(1, (0, typeorm_1.InjectRepository)(entities_1.EventStreamEntity)),
-    __metadata("design:paramtypes", [typeorm_2.Repository,
-        typeorm_2.Repository])
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.MessageEventSchema.name)),
+    __param(1, (0, mongoose_1.InjectModel)(schemas_1.EventStreamSchema.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model,
+        mongoose_2.Model])
 ], EventTracerService);
 //# sourceMappingURL=event-tracer.service.js.map

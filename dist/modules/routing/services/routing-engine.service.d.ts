@@ -1,11 +1,11 @@
-import { Repository } from 'typeorm';
-import { RoutingTableEntity } from '../../core/entities';
+import { Model } from 'mongoose';
+import { RoutingTableSchema } from '../../core/schemas';
 import { RoutingTable, RoutingRule, RouteEvaluationContext, RouteEvaluationResult } from '../../../common/models';
 export declare class RoutingEngineService {
-    private routingRepository;
+    private routingModel;
     private readonly logger;
     private routingCache;
-    constructor(routingRepository: Repository<RoutingTableEntity>);
+    constructor(routingModel: Model<RoutingTableSchema>);
     createRoutingTable(name: string, description?: string): Promise<RoutingTable>;
     getRoutingTable(id: string): Promise<RoutingTable | null>;
     getRoutingTableByName(name: string): Promise<RoutingTable | null>;

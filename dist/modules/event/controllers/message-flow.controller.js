@@ -14,20 +14,20 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MessageFlowController = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const typeorm_2 = require("typeorm");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
 const message_flow_service_1 = require("../services/message-flow.service");
-const application_entity_entity_1 = require("../../core/entities/application-entity.entity");
-const routing_table_entity_1 = require("../../core/entities/routing-table.entity");
-const standard_mapping_entity_1 = require("../../core/entities/standard-mapping.entity");
-const validation_rule_entity_1 = require("../../core/entities/validation-rule.entity");
+const application_entity_schema_1 = require("../../core/schemas/application-entity.schema");
+const routing_table_schema_1 = require("../../core/schemas/routing-table.schema");
+const standard_mapping_schema_1 = require("../../core/schemas/standard-mapping.schema");
+const validation_rule_schema_1 = require("../../core/schemas/validation-rule.schema");
 let MessageFlowController = class MessageFlowController {
-    constructor(flowService, aeRepository, routingRepository, mappingRepository, validationRepository) {
+    constructor(flowService, aeModel, routingModel, mappingModel, validationModel) {
         this.flowService = flowService;
-        this.aeRepository = aeRepository;
-        this.routingRepository = routingRepository;
-        this.mappingRepository = mappingRepository;
-        this.validationRepository = validationRepository;
+        this.aeModel = aeModel;
+        this.routingModel = routingModel;
+        this.mappingModel = mappingModel;
+        this.validationModel = validationModel;
     }
     async processOrder(body) {
         const payload = body.targetAE
@@ -66,10 +66,10 @@ let MessageFlowController = class MessageFlowController {
         return { success: true, result };
     }
     async getTopology() {
-        const applicationEntities = await this.aeRepository.find();
-        const routingTables = await this.routingRepository.find();
-        const mappings = await this.mappingRepository.find();
-        const validationRules = await this.validationRepository.find();
+        const applicationEntities = await this.aeModel.find().exec();
+        const routingTables = await this.routingModel.find().exec();
+        const mappings = await this.mappingModel.find().exec();
+        const validationRules = await this.validationModel.find().exec();
         return { applicationEntities, routingTables, mappings, validationRules };
     }
     async listTraces(limit = '20') {
@@ -137,14 +137,14 @@ __decorate([
 ], MessageFlowController.prototype, "getAudit", null);
 exports.MessageFlowController = MessageFlowController = __decorate([
     (0, common_1.Controller)('v1/flow'),
-    __param(1, (0, typeorm_1.InjectRepository)(application_entity_entity_1.ApplicationEntityEntity)),
-    __param(2, (0, typeorm_1.InjectRepository)(routing_table_entity_1.RoutingTableEntity)),
-    __param(3, (0, typeorm_1.InjectRepository)(standard_mapping_entity_1.StandardMappingEntity)),
-    __param(4, (0, typeorm_1.InjectRepository)(validation_rule_entity_1.ValidationRuleEntity)),
+    __param(1, (0, mongoose_1.InjectModel)(application_entity_schema_1.ApplicationEntity.name)),
+    __param(2, (0, mongoose_1.InjectModel)(routing_table_schema_1.RoutingTableSchema.name)),
+    __param(3, (0, mongoose_1.InjectModel)(standard_mapping_schema_1.StandardMappingSchema.name)),
+    __param(4, (0, mongoose_1.InjectModel)(validation_rule_schema_1.ValidationRuleSchema.name)),
     __metadata("design:paramtypes", [message_flow_service_1.MessageFlowService,
-        typeorm_2.Repository,
-        typeorm_2.Repository,
-        typeorm_2.Repository,
-        typeorm_2.Repository])
+        mongoose_2.Model,
+        mongoose_2.Model,
+        mongoose_2.Model,
+        mongoose_2.Model])
 ], MessageFlowController);
 //# sourceMappingURL=message-flow.controller.js.map

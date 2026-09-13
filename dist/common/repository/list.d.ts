@@ -1,4 +1,3 @@
-import { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 type ListQuery = {
     page?: number;
     limit?: number;
@@ -14,8 +13,13 @@ export type ListResult<T> = {
     };
     meta: any;
 };
-export declare function executeListQuery<T extends ObjectLiteral>(qb: SelectQueryBuilder<T>, alias: string, query: ListQuery): Promise<ListResult<T>>;
-export declare function applyFilters(qb: SelectQueryBuilder<any>, alias: string, filters: Record<string, any>): void;
-export declare function applyFilter(qb: SelectQueryBuilder<any>, alias: string, field: string, type: string, value?: any, valueTo?: any): void;
+type ParsedFilter = {
+    type: string;
+    value: any;
+    valueTo?: any;
+};
+export declare function executeListQuery<T>(model: any, baseFilter: Record<string, any>, query: ListQuery): Promise<ListResult<T>>;
+export declare function applyFilters(mongoFilter: Record<string, any>, filters: Record<string, any>): void;
+export declare function applyFilter(mongoFilter: Record<string, any>, field: string, filter: ParsedFilter): void;
 export {};
 //# sourceMappingURL=list.d.ts.map

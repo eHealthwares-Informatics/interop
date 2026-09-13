@@ -1,11 +1,11 @@
-import { Repository } from 'typeorm';
-import { ValidationRuleEntity } from '../../core/entities';
+import { Model } from 'mongoose';
+import { ValidationRuleSchema } from '../../core/schemas';
 import { RoutingRule, ValidationExecutionResult, ValidationRule } from '../../../common/models';
 import { CodingConceptClientService } from './coding-concept-client.service';
 export declare class ValidationRuleService {
-    private readonly validationRepository;
+    private readonly validationModel;
     private readonly codingConceptClient;
-    constructor(validationRepository: Repository<ValidationRuleEntity>, codingConceptClient: CodingConceptClientService);
+    constructor(validationModel: Model<ValidationRuleSchema>, codingConceptClient: CodingConceptClientService);
     create(payload: Omit<ValidationRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<ValidationRule>;
     list(): Promise<ValidationRule[]>;
     get(id: string): Promise<ValidationRule | null>;

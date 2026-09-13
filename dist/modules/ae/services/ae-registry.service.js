@@ -15,66 +15,55 @@ var AERegistryService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AERegistryService = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const typeorm_2 = require("typeorm");
-const crypto_1 = require("crypto");
-const entities_1 = require("../../core/entities");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const schemas_1 = require("../../core/schemas");
 const enums_1 = require("../../../common/enums");
 const list_1 = require("../../../common/repository/list");
 let AERegistryService = AERegistryService_1 = class AERegistryService {
-    constructor(aeRepository) {
-        this.aeRepository = aeRepository;
+    constructor(aeModel) {
+        this.aeModel = aeModel;
         this.logger = new common_1.Logger(AERegistryService_1.name);
     }
     async registerAE(aeContract) {
-        const id = (0, crypto_1.randomUUID)();
-        const ae = this.aeRepository.create({
-            id,
-            ...aeContract,
-        });
-        const saved = await this.aeRepository.save(ae);
-        this.logger.log(`AE registered: ${saved.id} (${saved.name})`);
+        const ae = new this.aeModel(aeContract);
+        const saved = await ae.save();
+        this.logger.log(`AE registered: ${saved._id} (${saved.name})`);
         return saved;
     }
     async getAE(id) {
-        return this.aeRepository.findOne({ where: { id } });
+        const doc = await this.aeModel.findOne({ _id: id, deletedAt: null });
+        return doc;
     }
     async getAEByName(name) {
-        return this.aeRepository.findOne({ where: { name } });
+        return this.aeModel.findOne({ name, deletedAt: null });
     }
     async listAEs(query) {
-        const qb = this.aeRepository.createQueryBuilder('ae');
-        const result = await (0, list_1.executeListQuery)(qb, 'ae', query);
+        const baseFilter = { deletedAt: null };
+        const result = await (0, list_1.executeListQuery)(this.aeModel, baseFilter, query);
         return result;
-        ;
     }
     async updateAE(id, updates) {
-        await this.aeRepository.update(id, updates);
-        const updated = await this.getAE(id);
+        const doc = await this.aeModel.findByIdAndUpdate(id, { $set: updates }, { new: true });
         this.logger.log(`AE updated: ${id}`);
-        return updated;
+        return doc;
     }
     async deactivateAE(id) {
-        await this.updateAE(id, { status: enums_1.AEStatus.INACTIVE });
+        await this.aeModel.findByIdAndUpdate(id, { $set: { status: enums_1.AEStatus.INACTIVE } });
         this.logger.log(`AE deactivated: ${id}`);
     }
     async deleteAE(id) {
-        await this.aeRepository.softDelete(id);
+        await this.aeModel.findByIdAndUpdate(id, { $set: { deletedAt: new Date() } });
         this.logger.log(`AE deleted: ${id}`);
     }
     async getAEsByProtocol(protocol, direction) {
-        const query = this.aeRepository.createQueryBuilder('ae');
-        if (direction === 'inbound') {
-            query.where(':protocol = ANY(ae.inboundCapabilities)', {
-                protocol,
-            });
-        }
-        else {
-            query.where(':protocol = ANY(ae.outboundCapabilities)', {
-                protocol,
-            });
-        }
-        return query.andWhere('ae.status = :status', { status: enums_1.AEStatus.ACTIVE }).getMany();
+        const capField = direction === 'inbound' ? 'inboundCapabilities' : 'outboundCapabilities';
+        const docs = await this.aeModel.find({
+            [capField]: protocol,
+            status: enums_1.AEStatus.ACTIVE,
+            deletedAt: null,
+        }).exec();
+        return docs;
     }
     async validateAEAccess(aeId, protocol, direction) {
         const ae = await this.getAE(aeId);
@@ -104,7 +93,6 @@ let AERegistryService = AERegistryService_1 = class AERegistryService {
                 timestamp: new Date(),
             };
         }
-        // Simple validation - in real implementation, would test actual connectivity
         const hasInbound = ae.inboundConfig?.length > 0;
         const hasOutbound = ae.outboundConfig?.length > 0;
         return {
@@ -114,13 +102,9 @@ let AERegistryService = AERegistryService_1 = class AERegistryService {
         };
     }
     async getAEStatistics() {
-        const total = await this.aeRepository.count();
-        const active = await this.aeRepository.count({
-            where: { status: enums_1.AEStatus.ACTIVE },
-        });
-        const inactive = await this.aeRepository.count({
-            where: { status: enums_1.AEStatus.INACTIVE },
-        });
+        const total = await this.aeModel.countDocuments({ deletedAt: null });
+        const active = await this.aeModel.countDocuments({ status: enums_1.AEStatus.ACTIVE, deletedAt: null });
+        const inactive = await this.aeModel.countDocuments({ status: enums_1.AEStatus.INACTIVE, deletedAt: null });
         return {
             totalAEs: total,
             activeAEs: active,
@@ -136,7 +120,7 @@ let AERegistryService = AERegistryService_1 = class AERegistryService {
 exports.AERegistryService = AERegistryService;
 exports.AERegistryService = AERegistryService = AERegistryService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(entities_1.ApplicationEntityEntity)),
-    __metadata("design:paramtypes", [typeorm_2.Repository])
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.ApplicationEntity.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model])
 ], AERegistryService);
 //# sourceMappingURL=ae-registry.service.js.map

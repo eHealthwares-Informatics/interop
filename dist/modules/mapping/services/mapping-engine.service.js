@@ -15,53 +15,40 @@ var MappingEngineService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MappingEngineService = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const typeorm_2 = require("typeorm");
-const crypto_1 = require("crypto");
-const entities_1 = require("../../core/entities");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const schemas_1 = require("../../core/schemas");
 const path_util_1 = require("../../../common/utils/path.util");
 let MappingEngineService = MappingEngineService_1 = class MappingEngineService {
-    constructor(mappingRepository) {
-        this.mappingRepository = mappingRepository;
+    constructor(mappingModel) {
+        this.mappingModel = mappingModel;
         this.logger = new common_1.Logger(MappingEngineService_1.name);
     }
     async createMapping(mapping) {
-        const id = (0, crypto_1.randomUUID)();
-        const entity = this.mappingRepository.create({
-            id,
-            ...mapping,
-        });
-        const saved = await this.mappingRepository.save(entity);
-        this.logger.log(`Mapping created: ${saved.id} (${saved.name})`);
+        const entity = new this.mappingModel(mapping);
+        const saved = await entity.save();
+        this.logger.log(`Mapping created: ${saved._id} (${saved.name})`);
         return saved;
     }
     async getMapping(id) {
-        const entity = await this.mappingRepository.findOne({ where: { id } });
-        return entity;
+        const doc = await this.mappingModel.findById(id).exec();
+        return doc;
     }
     async updateMapping(id, updates) {
-        await this.mappingRepository.update(id, updates);
-        const updated = await this.getMapping(id);
+        const doc = await this.mappingModel.findByIdAndUpdate(id, { $set: updates }, { new: true }).exec();
         this.logger.log(`Mapping updated: ${id}`);
-        return updated;
+        return doc;
     }
     async listMappings(filters) {
-        const query = this.mappingRepository.createQueryBuilder('m');
-        if (filters?.sourceProtocol) {
-            query.andWhere('m.sourceProtocol = :sourceProtocol', {
-                sourceProtocol: filters.sourceProtocol,
-            });
-        }
-        if (filters?.targetProtocol) {
-            query.andWhere('m.targetProtocol = :targetProtocol', {
-                targetProtocol: filters.targetProtocol,
-            });
-        }
-        if (filters?.active !== undefined) {
-            query.andWhere('m.active = :active', { active: filters.active });
-        }
-        const entities = await query.getMany();
-        return entities;
+        const filter = {};
+        if (filters?.sourceProtocol)
+            filter.sourceProtocol = filters.sourceProtocol;
+        if (filters?.targetProtocol)
+            filter.targetProtocol = filters.targetProtocol;
+        if (filters?.active !== undefined)
+            filter.active = filters.active;
+        const docs = await this.mappingModel.find(filter).exec();
+        return docs;
     }
     async mapMessage(message, mapping, context) {
         const startTime = Date.now();
@@ -81,7 +68,6 @@ let MappingEngineService = MappingEngineService_1 = class MappingEngineService {
                 variables: context?.variables || {},
                 lookupCache: context?.lookupCache,
             };
-            // Execute mapping steps
             for (const step of mapping.mappingSteps) {
                 try {
                     const result = await this.executeStep(step, message, mappingContext);
@@ -252,7 +238,7 @@ let MappingEngineService = MappingEngineService_1 = class MappingEngineService {
 exports.MappingEngineService = MappingEngineService;
 exports.MappingEngineService = MappingEngineService = MappingEngineService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(entities_1.StandardMappingEntity)),
-    __metadata("design:paramtypes", [typeorm_2.Repository])
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.StandardMappingSchema.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model])
 ], MappingEngineService);
 //# sourceMappingURL=mapping-engine.service.js.map

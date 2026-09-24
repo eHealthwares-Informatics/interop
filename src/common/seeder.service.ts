@@ -26,10 +26,10 @@ export class SeederService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.seedAEs();
-    await this.seedMappings();
-    await this.seedValidations();
-    await this.seedRouting();
+    try { await this.seedAEs(); } catch (e: any) { if (e?.code !== 11000) throw e; }
+    try { await this.seedMappings(); } catch (e: any) { if (e?.code !== 11000) throw e; }
+    try { await this.seedValidations(); } catch (e: any) { if (e?.code !== 11000) throw e; }
+    try { await this.seedRouting(); } catch (e: any) { if (e?.code !== 11000) throw e; }
   }
 
   private async seedAEs() {

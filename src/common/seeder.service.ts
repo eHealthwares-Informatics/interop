@@ -26,10 +26,10 @@ export class SeederService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    try { await this.seedAEs(); } catch (e) { console.warn('[Seeder] seedAEs skipped:', e?.message || e); }
-    try { await this.seedMappings(); } catch (e) { console.warn('[Seeder] seedMappings skipped:', e?.message || e); }
-    try { await this.seedValidations(); } catch (e) { console.warn('[Seeder] seedValidations skipped:', e?.message || e); }
-    try { await this.seedRouting(); } catch (e) { console.warn('[Seeder] seedRouting skipped:', e?.message || e); }
+    await this.seedAEs();
+    await this.seedMappings();
+    await this.seedValidations();
+    await this.seedRouting();
   }
 
   private async seedAEs() {
@@ -38,6 +38,9 @@ export class SeederService implements OnModuleInit {
     const customPort = Number(process.env.MOCK_CUSTOM_JSON_PORT || 18082);
     const switchApplicationUuid =
       process.env.SWITCH_APPLICATION_UUID || '00000000-0000-0000-0000-000000000001';
+
+    const count = await this.aeModel.countDocuments();
+    if (count > 0) return;
 
     await this.aeModel.insertMany([
       {
@@ -300,6 +303,8 @@ export class SeederService implements OnModuleInit {
   }
 
   private async seedMappings() {
+    const count = await this.mappingModel.countDocuments();
+    if (count > 0) return;
     await this.mappingModel.insertMany([
       {
         name: 'HealthStack Order Model -> Canonical',
@@ -373,6 +378,8 @@ export class SeederService implements OnModuleInit {
   }
 
   private async seedValidations() {
+    const count = await this.validationModel.countDocuments();
+    if (count > 0) return;
     await this.validationModel.insertMany([
       {
         name: 'Validate Laboratory LOINC Code',
@@ -398,6 +405,8 @@ export class SeederService implements OnModuleInit {
   }
 
   private async seedRouting() {
+    const count = await this.routingModel.countDocuments();
+    if (count > 0) return;
     await this.routingModel.create({
       name: 'Default Routing',
       description: 'Dynamic order routing from Healthstack to downstream systems.',

@@ -26,13 +26,20 @@ export class SeederService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.seedAEs();
-    await this.seedMappings();
-    await this.seedValidations();
-    await this.seedRouting();
+    try {
+      await this.seedAEs();
+      await this.seedMappings();
+      await this.seedValidations();
+      await this.seedRouting();
+    } catch (_) {
+      // Seed data already exists — safe to ignore duplicate key errors
+    }
   }
 
   private async seedAEs() {
+    const existing = await this.aeModel.findOne().lean().exec();
+    if (existing) return;
+
     const dcmPort = Number(process.env.MOCK_DCM4CHEE_HL7_PORT || 18080);
     const openElisPort = Number(process.env.MOCK_OPENELIS_FHIR_PORT || 18081);
     const customPort = Number(process.env.MOCK_CUSTOM_JSON_PORT || 18082);
@@ -303,8 +310,8 @@ export class SeederService implements OnModuleInit {
   }
 
   private async seedMappings() {
-    const count = await this.mappingModel.countDocuments();
-    if (count > 0) return;
+    const existing = await this.mappingModel.findOne().lean().exec();
+    if (existing) return;
     await this.mappingModel.insertMany([
       {
         name: 'HealthStack Order Model -> Canonical',
@@ -378,8 +385,8 @@ export class SeederService implements OnModuleInit {
   }
 
   private async seedValidations() {
-    const count = await this.validationModel.countDocuments();
-    if (count > 0) return;
+    const existing = await this.validationModel.findOne().lean().exec();
+    if (existing) return;
     await this.validationModel.insertMany([
       {
         name: 'Validate Laboratory LOINC Code',
@@ -405,8 +412,8 @@ export class SeederService implements OnModuleInit {
   }
 
   private async seedRouting() {
-    const count = await this.routingModel.countDocuments();
-    if (count > 0) return;
+    const existing = await this.routingModel.findOne().lean().exec();
+    if (existing) return;
     await this.routingModel.create({
       name: 'Default Routing',
       description: 'Dynamic order routing from Healthstack to downstream systems.',

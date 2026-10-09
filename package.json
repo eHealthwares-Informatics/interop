@@ -10,6 +10,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main.js",
+    "seed": "ts-node src/seed/main.ts",
+    "seed:prod": "node dist/seed/main.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

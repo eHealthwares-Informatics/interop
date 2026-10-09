@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
@@ -6,14 +6,16 @@ import {
   MessageType,
   ProtocolType,
   RouteStatus,
-} from './enums';
+} from '../common/enums';
 import { ApplicationEntity } from '../modules/core/schemas/application-entity.schema';
 import { RoutingTableSchema } from '../modules/core/schemas/routing-table.schema';
 import { StandardMappingSchema } from '../modules/core/schemas/standard-mapping.schema';
 import { ValidationRuleSchema } from '../modules/core/schemas/validation-rule.schema';
 
 @Injectable()
-export class SeederService implements OnModuleInit {
+export class SeedService {
+  private readonly logger = new Logger(SeedService.name);
+
   constructor(
     @InjectModel(ApplicationEntity.name)
     private readonly aeModel: Model<ApplicationEntity>,
@@ -25,31 +27,76 @@ export class SeederService implements OnModuleInit {
     private readonly validationModel: Model<ValidationRuleSchema>,
   ) {}
 
-  async onModuleInit() {
+  async run(): Promise<void> {
+    await this.upsert(this.aeModel, await this.buildApplicationEntities(), 'name');
+    await this.upsert(
+      this.mappingModel,
+      await this.buildMappingDocuments(),
+      ['name', 'version'],
+    );
+    await this.upsert(this.validationModel, await this.buildValidationDocuments(), 'name');
+    await this.upsert(this.routingModel, await this.buildRoutingDocuments(), 'name');
+    this.logger.log('Reference data seeding completed (idempotent).');
+  }
+
+  /**
+   * Idempotently upserts documents keyed on the natural unique key(s).
+   * Uses `$setOnInsert` so already-present (correct) data is never modified,
+   * and ignores duplicate-key (E11000) errors so re-runs never crash.
+   */
+  private async upsert<T>(
+    model: Model<any>,
+    docs: Record<string, any>[],
+    key: string | string[],
+  ): Promise<void> {
+    if (!docs.length) return;
+
+    const keys = Array.isArray(key) ? key : [key];
+    const operations = docs.map((doc) => ({
+      updateOne: {
+        filter: keys.reduce<Record<string, any>>((acc, k) => {
+          acc[k] = doc[k];
+          return acc;
+        }, {}),
+        update: { $setOnInsert: doc },
+        upsert: true,
+      },
+    }));
+
     try {
-      await this.seedAEs();
-      await this.seedMappings();
-      await this.seedValidations();
-      await this.seedRouting();
-    } catch (_) {
-      // Seed data already exists — safe to ignore duplicate key errors
+      const result = await model.bulkWrite(operations, { ordered: false });
+      this.logger.log(
+        `${model.collection.collectionName}: matched ${result.matchedCount}, ` +
+          `inserted ${result.upsertedCount}, modified ${result.modifiedCount}`,
+      );
+    } catch (error) {
+      if (this.isDuplicateKeyError(error)) {
+        this.logger.warn(
+          `${model.collection.collectionName}: duplicate key ignored — data already seeded.`,
+        );
+        return;
+      }
+      throw error;
     }
   }
 
-  private async seedAEs() {
-    const existing = await this.aeModel.findOne().lean().exec();
-    if (existing) return;
+  private isDuplicateKeyError(error: any): boolean {
+    if (!error) return false;
+    if (error.code === 11000) return true;
+    const writeErrors = error.writeErrors ?? error.result?.result?.writeErrors;
+    if (Array.isArray(writeErrors)) {
+      return writeErrors.every((e: any) => e?.code === 11000 || e?.err?.code === 11000);
+    }
+    return false;
+  }
 
+  private async buildApplicationEntities(): Promise<Record<string, any>[]> {
     const dcmPort = Number(process.env.MOCK_DCM4CHEE_HL7_PORT || 18080);
-    const openElisPort = Number(process.env.MOCK_OPENELIS_FHIR_PORT || 18081);
     const customPort = Number(process.env.MOCK_CUSTOM_JSON_PORT || 18082);
     const switchApplicationUuid =
       process.env.SWITCH_APPLICATION_UUID || '00000000-0000-0000-0000-000000000001';
 
-    const count = await this.aeModel.countDocuments();
-    if (count > 0) return;
-
-    await this.aeModel.insertMany([
+    return [
       {
         name: 'Switch',
         description: 'Internal switch identity used for outbound sending application/facility metadata.',
@@ -306,21 +353,19 @@ export class SeederService implements OnModuleInit {
         mappings: { inbound: [], outbound: [] },
         securitySettings: { tlsEnabled: false },
       },
-    ]);
+    ];
   }
 
-  private async seedMappings() {
-    const existing = await this.mappingModel.findOne().lean().exec();
-    if (existing) return;
-    await this.mappingModel.insertMany([
+  private async buildMappingDocuments(): Promise<Record<string, any>[]> {
+    return [
       {
         name: 'HealthStack Order Model -> Canonical',
+        version: '1.0.0',
         description: 'Maps the Feathers/Mongoose order payload produced by HealthStack into the switch canonical envelope.',
         sourceProtocol: ProtocolType.CUSTOM_JSON,
         targetProtocol: 'CANONICAL',
         sourceMessageType: MessageType.ORDER,
         targetMessageType: MessageType.ORDER,
-        version: '1.0.0',
         active: true,
         mappingSteps: [
           { id: '1', name: 'Message Type', type: 'field-map', sourceField: '', targetField: 'messageType', transformation: '"ORDER"' },
@@ -347,12 +392,12 @@ export class SeederService implements OnModuleInit {
       },
       {
         name: 'Canonical Order -> Custom JSON',
+        version: '1.0.0',
         description: 'Example outbound mapping for custom JSON sinks.',
         sourceProtocol: 'CANONICAL',
         targetProtocol: ProtocolType.CUSTOM_JSON,
         sourceMessageType: MessageType.ORDER,
         targetMessageType: MessageType.ORDER,
-        version: '1.0.0',
         active: true,
         mappingSteps: [
           { id: '1', name: 'Order Reference', type: 'field-map', sourceField: 'order.id', targetField: 'orderReference', transformation: 'String(value || "")' },
@@ -364,12 +409,12 @@ export class SeederService implements OnModuleInit {
       },
       {
         name: 'Canonical Order -> LIS Interop Order',
+        version: '1.0.0',
         description: 'Maps the canonical order to the RxSoft LIS CreateInteropOrderDto format.',
         sourceProtocol: 'CANONICAL',
         targetProtocol: ProtocolType.CUSTOM_JSON,
         sourceMessageType: MessageType.ORDER,
         targetMessageType: MessageType.ORDER,
-        version: '1.0.0',
         active: true,
         mappingSteps: [
           { id: '1', name: 'Patient ID', type: 'field-map', sourceField: 'order.subject.id', targetField: 'patient.patientId', transformation: 'String(value || sourceMessage.patient?.identifier?.[0]?.value || "unknown")' },
@@ -381,13 +426,11 @@ export class SeederService implements OnModuleInit {
           { id: '7', name: 'Test Name', type: 'field-map', sourceField: 'order.code.display', targetField: 'items[0].testName', transformation: 'String(value || "Unknown")' },
         ],
       },
-    ]);
+    ];
   }
 
-  private async seedValidations() {
-    const existing = await this.validationModel.findOne().lean().exec();
-    if (existing) return;
-    await this.validationModel.insertMany([
+  private async buildValidationDocuments(): Promise<Record<string, any>[]> {
+    return [
       {
         name: 'Validate Laboratory LOINC Code',
         description: 'Ensure laboratory orders reference a valid LOINC code before dispatch.',
@@ -408,115 +451,116 @@ export class SeederService implements OnModuleInit {
         action: { type: 'coding-concept-exists', module: 'DICOM', codePath: 'order.code.code', searchMode: 'search', includeMetadata: false },
         failureResponse: { statusCode: 422, code: 'RADIOLOGY_CODE_NOT_FOUND', message: 'The canonical order code was not found in the coding concept service for module DICOM.' },
       },
-    ]);
+    ];
   }
 
-  private async seedRouting() {
-    const existing = await this.routingModel.findOne().lean().exec();
-    if (existing) return;
-    await this.routingModel.create({
-      name: 'Default Routing',
-      description: 'Dynamic order routing from Healthstack to downstream systems.',
-      defaultRoute: null,
-      routes: [
-        {
-          id: 'route-order-dcm4chee',
-          name: 'Healthstack Order -> DCM4CHEE',
-          description: 'Orders explicitly targeting DCM4CHEE are sent as HL7.',
-          priority: 1,
-          sourceAE: 'healthstack',
-          targetAE: 'dcm4chee',
-          applicationId: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ORM',
-          applicationName: process.env.DCM4CHEE_APPLICATION_NAME || 'DCM4CHEE',
-          applicationIdentifier: {
-            namespaceId: process.env.DCM4CHEE_APPLICATION_NAMESPACE_ID || 'DCM4CHEE_APP',
-            id: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ORM',
-            idType: process.env.DCM4CHEE_APPLICATION_ID_TYPE || 'UUID',
+  private async buildRoutingDocuments(): Promise<Record<string, any>[]> {
+    const now = new Date();
+    return [
+      {
+        name: 'Default Routing',
+        description: 'Dynamic order routing from Healthstack to downstream systems.',
+        defaultRoute: null,
+        routes: [
+          {
+            id: 'route-order-dcm4chee',
+            name: 'Healthstack Order -> DCM4CHEE',
+            description: 'Orders explicitly targeting DCM4CHEE are sent as HL7.',
+            priority: 1,
+            sourceAE: 'healthstack',
+            targetAE: 'dcm4chee',
+            applicationId: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ORM',
+            applicationName: process.env.DCM4CHEE_APPLICATION_NAME || 'DCM4CHEE',
+            applicationIdentifier: {
+              namespaceId: process.env.DCM4CHEE_APPLICATION_NAMESPACE_ID || 'DCM4CHEE_APP',
+              id: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ORM',
+              idType: process.env.DCM4CHEE_APPLICATION_ID_TYPE || 'UUID',
+            },
+            messageType: MessageType.ORDER,
+            protocol: ProtocolType.HL7_V2,
+            conditions: [],
+            enrichmentIds: ['validate-radiology-dicom-code'],
+            enrichmentConfig: { enabled: true, useCodingServer: true, mode: 'search', stopOnLookupMiss: true },
+            validationIds: ['validate-radiology-dicom-code'],
+            validationConfig: { enabled: true, useCodingServer: true, mode: 'search' },
+            enabled: true,
+            status: RouteStatus.ACTIVE,
+            createdAt: now,
+            updatedAt: now,
           },
-          messageType: MessageType.ORDER,
-          protocol: ProtocolType.HL7_V2,
-          conditions: [],
-          enrichmentIds: ['validate-radiology-dicom-code'],
-          enrichmentConfig: { enabled: true, useCodingServer: true, mode: 'search', stopOnLookupMiss: true },
-          validationIds: ['validate-radiology-dicom-code'],
-          validationConfig: { enabled: true, useCodingServer: true, mode: 'search' },
-          enabled: true,
-          status: RouteStatus.ACTIVE,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'route-order-openelis',
-          name: 'Healthstack Order -> OpenELIS',
-          description: 'Orders explicitly targeting OpenELIS are sent as FHIR.',
-          priority: 2,
-          sourceAE: 'healthstack',
-          targetAE: 'openelis',
-          applicationId: process.env.OPENELIS_APPLICATION_ID || 'OPENELIS-SR',
-          applicationName: process.env.OPENELIS_APPLICATION_NAME || 'OPENELIS',
-          applicationIdentifier: {
-            namespaceId: process.env.OPENELIS_APPLICATION_NAMESPACE_ID || 'OPENELIS_APP',
-            id: process.env.OPENELIS_APPLICATION_ID || 'OPENELIS-SR',
-            idType: process.env.OPENELIS_APPLICATION_ID_TYPE || 'UUID',
+          {
+            id: 'route-order-openelis',
+            name: 'Healthstack Order -> OpenELIS',
+            description: 'Orders explicitly targeting OpenELIS are sent as FHIR.',
+            priority: 2,
+            sourceAE: 'healthstack',
+            targetAE: 'openelis',
+            applicationId: process.env.OPENELIS_APPLICATION_ID || 'OPENELIS-SR',
+            applicationName: process.env.OPENELIS_APPLICATION_NAME || 'OPENELIS',
+            applicationIdentifier: {
+              namespaceId: process.env.OPENELIS_APPLICATION_NAMESPACE_ID || 'OPENELIS_APP',
+              id: process.env.OPENELIS_APPLICATION_ID || 'OPENELIS-SR',
+              idType: process.env.OPENELIS_APPLICATION_ID_TYPE || 'UUID',
+            },
+            messageType: MessageType.ORDER,
+            protocol: ProtocolType.FHIR_R4,
+            conditions: [],
+            enrichmentIds: ['validate-laboratory-loinc-code'],
+            enrichmentConfig: { enabled: true, useCodingServer: true, mode: 'search', stopOnLookupMiss: true },
+            validationIds: ['validate-laboratory-loinc-code'],
+            validationConfig: { enabled: true, useCodingServer: true, mode: 'search' },
+            enabled: true,
+            status: RouteStatus.ACTIVE,
+            createdAt: now,
+            updatedAt: now,
           },
-          messageType: MessageType.ORDER,
-          protocol: ProtocolType.FHIR_R4,
-          conditions: [],
-          enrichmentIds: ['validate-laboratory-loinc-code'],
-          enrichmentConfig: { enabled: true, useCodingServer: true, mode: 'search', stopOnLookupMiss: true },
-          validationIds: ['validate-laboratory-loinc-code'],
-          validationConfig: { enabled: true, useCodingServer: true, mode: 'search' },
-          enabled: true,
-          status: RouteStatus.ACTIVE,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'route-patient-default',
-          name: 'Healthstack Patient -> DCM4CHEE',
-          description: 'Patient updates are forwarded to DCM4CHEE as HL7 ADT.',
-          priority: 10,
-          sourceAE: 'healthstack',
-          targetAE: 'dcm4chee',
-          applicationId: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ADT',
-          applicationName: process.env.DCM4CHEE_APPLICATION_NAME || 'DCM4CHEE',
-          applicationIdentifier: {
-            namespaceId: process.env.DCM4CHEE_APPLICATION_NAMESPACE_ID || 'DCM4CHEE_APP',
-            id: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ADT',
-            idType: process.env.DCM4CHEE_APPLICATION_ID_TYPE || 'UUID',
+          {
+            id: 'route-patient-default',
+            name: 'Healthstack Patient -> DCM4CHEE',
+            description: 'Patient updates are forwarded to DCM4CHEE as HL7 ADT.',
+            priority: 10,
+            sourceAE: 'healthstack',
+            targetAE: 'dcm4chee',
+            applicationId: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ADT',
+            applicationName: process.env.DCM4CHEE_APPLICATION_NAME || 'DCM4CHEE',
+            applicationIdentifier: {
+              namespaceId: process.env.DCM4CHEE_APPLICATION_NAMESPACE_ID || 'DCM4CHEE_APP',
+              id: process.env.DCM4CHEE_APPLICATION_ID || 'DCM4CHEE-ADT',
+              idType: process.env.DCM4CHEE_APPLICATION_ID_TYPE || 'UUID',
+            },
+            messageType: MessageType.PATIENT,
+            protocol: ProtocolType.HL7_V2,
+            conditions: [],
+            enabled: true,
+            status: RouteStatus.ACTIVE,
+            createdAt: now,
+            updatedAt: now,
           },
-          messageType: MessageType.PATIENT,
-          protocol: ProtocolType.HL7_V2,
-          conditions: [],
-          enabled: true,
-          status: RouteStatus.ACTIVE,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'route-order-rxsoft-lis',
-          name: 'Healthstack Order -> RxSoft LIS',
-          description: 'Laboratory orders from HealthStack are routed to RxSoft LIS via CUSTOM_JSON.',
-          priority: 1.5,
-          sourceAE: 'healthstack',
-          targetAE: 'rxsoft-lis',
-          applicationId: process.env.RXSOFT_LIS_APPLICATION_ID || 'RXSOFT-LIS',
-          applicationName: process.env.RXSOFT_LIS_APPLICATION_NAME || 'RxSoft LIS',
-          applicationIdentifier: {
-            namespaceId: process.env.RXSOFT_LIS_APPLICATION_NAMESPACE_ID || 'RXSOFT_LIS_APP',
-            id: process.env.RXSOFT_LIS_APPLICATION_ID || 'RXSOFT-LIS',
-            idType: process.env.RXSOFT_LIS_APPLICATION_ID_TYPE || 'UUID',
+          {
+            id: 'route-order-rxsoft-lis',
+            name: 'Healthstack Order -> RxSoft LIS',
+            description: 'Laboratory orders from HealthStack are routed to RxSoft LIS via CUSTOM_JSON.',
+            priority: 1.5,
+            sourceAE: 'healthstack',
+            targetAE: 'rxsoft-lis',
+            applicationId: process.env.RXSOFT_LIS_APPLICATION_ID || 'RXSOFT-LIS',
+            applicationName: process.env.RXSOFT_LIS_APPLICATION_NAME || 'RxSoft LIS',
+            applicationIdentifier: {
+              namespaceId: process.env.RXSOFT_LIS_APPLICATION_NAMESPACE_ID || 'RXSOFT_LIS_APP',
+              id: process.env.RXSOFT_LIS_APPLICATION_ID || 'RXSOFT-LIS',
+              idType: process.env.RXSOFT_LIS_APPLICATION_ID_TYPE || 'UUID',
+            },
+            messageType: MessageType.ORDER,
+            protocol: ProtocolType.CUSTOM_JSON,
+            conditions: [{ field: 'metadata.orderCategory', operator: 'contains', value: 'LAB' }],
+            mappingId: 'canonical-to-lis-order',
+            enabled: true,
+            status: RouteStatus.ACTIVE,
+            createdAt: now,
+            updatedAt: now,
           },
-          messageType: MessageType.ORDER,
-          protocol: ProtocolType.CUSTOM_JSON,
-          conditions: [{ field: 'metadata.orderCategory', operator: 'contains', value: 'LAB' }],
-          mappingId: 'canonical-to-lis-order',
-          enabled: true,
-          status: RouteStatus.ACTIVE,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
-    });
+        ],
+      },
+    ];
   }
 }

@@ -8,24 +8,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CommonModule = void 0;
 const common_1 = require("@nestjs/common");
-const mongoose_1 = require("@nestjs/mongoose");
-const seeder_service_1 = require("./seeder.service");
-const schemas_1 = require("../modules/core/schemas");
 let CommonModule = class CommonModule {
 };
 exports.CommonModule = CommonModule;
 exports.CommonModule = CommonModule = __decorate([
-    (0, common_1.Module)({
-        imports: [
-            mongoose_1.MongooseModule.forFeature([
-                { name: schemas_1.ApplicationEntity.name, schema: schemas_1.ApplicationEntitySchema },
-                { name: schemas_1.RoutingTableSchema.name, schema: schemas_1.RoutingTableSchemas },
-                { name: schemas_1.StandardMappingSchema.name, schema: schemas_1.StandardMappingSchemas },
-                { name: schemas_1.ValidationRuleSchema.name, schema: schemas_1.ValidationRuleSchemas },
-            ]),
-        ],
-        providers: [seeder_service_1.SeederService],
-        exports: [seeder_service_1.SeederService],
-    })
+    (0, common_1.Module)({})
 ], CommonModule);
 //# sourceMappingURL=common.module.js.map
